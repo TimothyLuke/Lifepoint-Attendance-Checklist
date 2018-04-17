@@ -1,0 +1,79 @@
+<div class="fluro-search-select">
+	<div ng-if="to.definition.type == 'reference'">
+		<div class="list-group" ng-if="multiple && selection.values.length">
+			<div class="list-group-item" ng-repeat="item in selection.values">
+				<i class="fa fa-times pull-right" ng-click="deselect(item)"></i>
+				{{item.title}}
+			</div>
+		</div>
+		<div class="list-group" ng-if="!multiple && selection.value">
+			<div class="list-group-item clearfix">
+				<i class="fa fa-times pull-right" ng-click="deselect(selection.value)"></i>
+				{{selection.value.title}}
+			</div>
+		</div>
+		<div ng-if="canAddMore()">
+
+			<div class="input-group">
+				<!-- <input class="form-control" formly-skip-ng-model-attrs-manipulator ng-model="search.terms"/> -->
+
+				<input type="text" class="form-control" formly-skip-ng-model-attrs-manipulator ng-model="proposed.value" 
+				typeahead-template-url="fluro-interaction-form/search-select/fluro-search-select-item.html"
+				typeahead-on-select="select($item)" 
+				placeholder="Search" 
+				typeahead="item.title for item in retrieveReferenceOptions($viewValue)" 
+				typeahead-loading="search.loading"/>
+
+				<div class="input-group-addon" ng-if="!search.loading" ng-click="search.terms = ''">
+					<i class="fa" ng-class="{'fa-search':!search.terms.length, 'fa-times':search.terms.length}"></i>
+				</div>
+
+				<div class="input-group-addon" ng-if="search.loading">
+					<i class="fa fa-spin fa-spinner"></i>
+				</div>
+			</div>
+		</div>
+	</div>
+
+
+
+	<div ng-if="to.definition.type != 'reference'">
+		
+
+		<div class="list-group" ng-if="multiple && selection.values.length">
+			<div class="list-group-item" ng-repeat="value in selection.values">
+				<i class="fa fa-times pull-right" ng-click="deselect(value)"></i>
+				{{getValueLabel(value)}}
+			</div>
+		</div>
+
+		<div class="list-group" ng-if="!multiple && selection.value">
+			<div class="list-group-item clearfix">
+				<i class="fa fa-times pull-right" ng-click="deselect(selection.value)"></i>
+				{{getValueLabel(selection.value)}} 
+			</div>
+		</div>
+		<div ng-if="canAddMore()">
+			<div class="input-group">
+				<!-- <input class="form-control" formly-skip-ng-model-attrs-manipulator ng-model="search.terms"/> -->
+				<input type="text" class="form-control" formly-skip-ng-model-attrs-manipulator ng-model="proposed.value" 
+				typeahead-template-url="fluro-interaction-form/search-select/fluro-search-select-value.html"
+				typeahead-on-select="select($item.value)" 
+				placeholder="Search" 
+				typeahead="item.name for item in retrieveValueOptions($viewValue)" 
+				typeahead-loading="search.loading"/>
+
+				<div class="input-group-addon" ng-if="!search.loading" ng-click="search.terms = ''">
+					<i class="fa" ng-class="{'fa-search':!search.terms.length, 'fa-times':search.terms.length}"></i>
+				</div>
+
+				<div class="input-group-addon" ng-if="search.loading">
+					<i class="fa fa-spin fa-spinner"></i>
+				</div>
+			</div>
+		</div>
+	</div>
+
+
+
+</div>

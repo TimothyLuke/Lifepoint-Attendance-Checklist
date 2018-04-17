@@ -1,0 +1,39 @@
+<div id="{{options.id}}" class="fluro-order-select">
+
+	<div ng-if="selection.values.length">
+		<p class="help-block">
+			Drag to reorder your choices
+		</p>
+	</div>
+	
+	<div class="list-group" as-sortable="dragControlListeners" formly-skip-ng-model-attrs-manipulator ng-model="selection.values">
+		<div class="list-group-item clearfix" as-sortable-item ng-repeat="item in selection.values">
+			
+				<div class="pull-left" as-sortable-item-handle>
+					<i class="fa fa-arrows order-select-handle"></i>
+					<span class="order-number text-muted">{{$index+1}}</span> <span>{{item}}</span>
+				</div>
+				<div class="pull-right order-select-remove" ng-click="deselect(item)">
+					<i class="fa fa-times"></i>
+				</div>
+			
+		</div>
+	</div>
+
+	<div ng-if="canAddMore()">
+		<p class="help-block">
+			Choose by selecting options below
+		</p>
+		<select class="form-control" ng-model="selectBox.item" ng-change="selectUpdate()">
+			<option ng-repeat="(key, option) in to.options | orderBy:'value'" ng-if="!contains(option.value)" value="{{option.value}}">{{option.value}}</option>
+		</select>
+		<!-- <a ng-repeat="(key, option) in to.options" ng-if="!contains(option.value)" class="btn btn-default" id="{{id + '_'+ $index}}" ng-click="toggle(option.value)">
+			<span>{{option.name}}</span>
+		</a> -->
+	</div>
+</div>
+
+
+
+
+

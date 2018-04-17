@@ -1,0 +1,64 @@
+.accordion {
+	
+	@extend .border-top;
+	
+
+	.accordion-title {
+		padding: 30px 0;
+		transition: background 0.4s;
+
+		i {
+			transition: all 0.4s;
+		}
+		
+	}
+
+	.accordion-body {
+		@extend .wrapper-sm;
+		display: none;
+	}
+
+
+	@media(max-width: $screen-xs-max) {
+
+		&.expanded {
+			background: #fff;
+
+			// .accordion-title {
+			// 	padding-bottom:15px;
+			// }
+
+			.accordion-body {
+				padding-top:0;
+				display: block;
+			}
+		}
+	}
+}
+
+
+@media(min-width: $screen-sm-min) {
+
+	.accordion {
+		// background: #fff;
+		.accordion-title {
+			transition:none;
+			background: none;
+			padding: 30px 0;
+
+			// &:hover {
+			// 	background: #fff;
+			// }
+
+			i {
+				display: none !important;
+			}
+
+		}
+
+		.accordion-body {
+			display: block !important;
+			padding: 0 0 30px 0;
+		}	
+	}
+}

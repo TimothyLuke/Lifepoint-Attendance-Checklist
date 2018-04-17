@@ -1,0 +1,73 @@
+<div class="fluro-interaction-form">
+
+<div ng-if="!correctPermissions" class="form-permission-warning">
+	<div class="alert alert-warning small">
+		<i class="fa fa-warning"></i>
+		<span>You do not have permission to post {{model.plural}}</span>
+	</div>
+</div>
+<div ng-if="promisesResolved && correctPermissions">
+
+	<div ng-if="debugMode">
+		<div class="btn-group btn-group-justified">
+			<a ng-click="vm.state = 'ready'" class="btn btn-default">State to ready</a>
+			<a ng-click="vm.state = 'complete'" class="btn btn-default">State to complete</a>
+			<a ng-click="reset()" class="btn btn-default">Reset</a>
+		</div>
+		<hr/>
+	</div>
+	<div ng-show="vm.state != 'complete'">
+		<form novalidate ng-submit="vm.onSubmit()" >
+			<formly-form model="vm.model" fields="vm.modelFields" form="vm.modelForm" options="vm.options">
+				
+				<div ng-if="model.data.recaptcha">
+					<div recaptcha-render></div>
+				</div>
+
+				<div class="form-error-summary form-client-error alert alert-warning" ng-if="vm.modelForm.$invalid && !vm.modelForm.$pristine">
+					<div class="form-error-summary-item" ng-repeat="field in errorList" ng-if="field.formControl.$invalid">
+
+						
+						<i class="fa fa-exclamation"></i>
+						<span ng-if="field.templateOptions.definition.errorMessage.length">{{field.templateOptions.definition.errorMessage}}</span>
+						<span ng-if="!field.templateOptions.definition.errorMessage.length">{{field.templateOptions.label}} has not been provided.</span>
+					</div>
+				</div>
+
+				<div ng-switch="vm.state">
+					<div ng-switch-when="sending">
+						<a class="btn btn-primary" ng-disabled="true">
+							<span>Processing</span>
+							<i class="fa fa-spinner fa-spin"></i>
+						</a>
+					</div>
+					<div ng-switch-when="error">
+						<div class="form-error-summary form-server-error alert alert-danger" ng-if="processErrorMessages.length">
+							<div class="form-error-summary-item" ng-repeat="error in processErrorMessages track by $index">
+								<i class="fa fa-exclamation"></i>
+								<span>Error processing your submission: {{error}}</span>
+							</div>
+
+						</div>
+						<button type="submit" class="btn btn-primary" ng-disabled="!readyToSubmit">
+							<span>Try Again</span>
+							<i class="fa fa-angle-right"></i>
+						</button>
+					</div>
+					<div ng-switch-default>
+						<button type="submit" class="btn btn-primary" ng-disabled="!readyToSubmit">
+							<span>{{submitLabel}}</span>
+							<i class="fa fa-angle-right"></i>
+						</button>
+					</div>
+				</div>
+			</formly-form>
+		</form>
+	</div>
+	<div ng-show="vm.state == 'complete'">
+		<div compile-html="transcludedContent"></div>
+	</div>
+</div>
+</div>
+
+

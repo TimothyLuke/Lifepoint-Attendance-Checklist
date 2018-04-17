@@ -1,0 +1,40 @@
+<hr/>
+<div class="payment-summary">
+
+	<h3>Payment details</h3>
+
+	<div class="form-group">
+		<div ng-if="modifications.length" class="payment-running-total">
+			<div class="row payment-base-row">
+				<div class="col-xs-6"><strong>Base Price</strong></div>
+				<div class="col-xs-3 col-xs-offset-3">{{paymentDetails.amount / 100 | currency}}</div>
+			</div>
+
+
+			<div class="row text-muted" ng-repeat="mod in modifications">
+				<div class="col-xs-6">
+					<em>{{mod.title}}</em>
+				</div>
+				<div class="col-xs-3 text-right">
+					<em>{{mod.description}}</em>
+				</div>
+				<div class="col-xs-3">
+					<em class="text-muted">{{mod.total / 100 | currency}}</em>
+				</div>
+			</div>
+			<div class="row payment-total-row">
+				<div class="col-xs-6">
+					<h4>Total</h4>
+				</div>
+				<div class="col-xs-3 col-xs-offset-3">
+					<h4>{{calculatedTotal /100 |currency}} <span class="text-uppercase text-muted">{{paymentDetails.currency}}</span></h4>
+				</div>
+			</div>
+
+		</div>
+
+		<div class="payment-amount" ng-if="!modifications.length">
+			{{calculatedTotal /100 |currency}} <span class="text-uppercase">({{paymentDetails.currency}})</span>
+		</div>
+	</div>
+</div>

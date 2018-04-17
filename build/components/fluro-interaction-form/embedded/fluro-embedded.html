@@ -1,0 +1,36 @@
+
+
+<div class="fluro-embedded-form">
+
+
+  <div class="form-multi-group" ng-if="to.definition.maximum != 1">
+    <div class="panel panel-default" ng-init="fields = copyFields(); dataFields = copyDataFields(); " ng-repeat="entry in model[options.key] track by $index">
+      <div class="panel-heading clearfix">
+
+        <a ng-if="canRemove()" class="btn btn-danger btn-sm pull-right" ng-click="model[options.key].splice($index, 1)">
+          <span>Remove {{to.label}}</span><i class="fa fa-times"></i>
+        </a>
+
+        <h5>{{to.label}} {{$index + 1}}</h5>
+      </div>
+      <div class="panel-body">
+
+      
+        <formly-form model="entry" fields="fields"></formly-form>
+        <formly-form model="entry.data" fields="dataFields"></formly-form>
+      </div>
+    </div>
+
+
+
+    <a class="btn btn-primary btn-sm" ng-if="canAdd()" ng-click="addAnother()">
+      <span>Add <span ng-if="model[options.key].length">another</span> {{to.label}}</span><i class="fa fa-plus"></i>
+    </a>
+  </div>
+  <div ng-if="to.definition.maximum == 1 && options.key"> 
+      <formly-form model="model[options.key]" fields="options.data.fields"></formly-form>
+      <formly-form model="model[options.key].data" fields="options.data.dataFields"></formly-form>
+  </div>
+</div>
+
+

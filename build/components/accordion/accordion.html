@@ -1,0 +1,17 @@
+<div class="accordion" ng-class="{expanded:settings.expanded}">
+	<div class="accordion-title" ng-click="settings.expanded = !settings.expanded">
+		<div class="container-fluid">
+			<div class="text-wrap">
+				<h3 class="title" >
+					<i class="fa fa-angle-right pull-right" ng-class="{'fa-rotate-90':settings.expanded}"></i>
+					<span ng-transclude="title"></span>
+				</h3>
+			</div>
+		</div>
+	</div>
+	<div class="accordion-body">
+		<div ng-class="{'container':wide, 'container-fluid':!wide}">
+			<div ng-class="{'text-wrap':!wide}" ng-transclude="body"></div>
+		</div>
+	</div>
+</div>

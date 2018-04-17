@@ -1,0 +1,98 @@
+<div class="bg-white border-bottom">
+	<div class="wrapper-xs">
+		<div class="container-fluid">
+			<div class="text-wrap">
+
+				<h1><div class="pull-right">
+						<i class="fa fa-circle" ng-repeat="realm in item.realms" style="margin-left:-30px; color: {{realm.bgColor}}"></i>
+					</div>
+
+					{{item.title}}</h1>
+				<h4 class="text-muted" ng-show="definition.title.length">{{definition.title}}</h4>
+				<h4 class="text-muted" ng-show="!definition.title.length">{{item._type}}</h4>
+				<h4 ng-show="item.definition == 'song'"><span class="text-muted">By {{item.data.artist}}</span></h4>
+			</div>
+		</div>
+	</div>
+</div>
+
+
+<div ng-switch="item.definition">
+	<div ng-switch-when="song">
+		<accordion>
+			<accordion-title>
+				Song Details
+			</accordion-title>
+			<accordion-body>
+				<div class="row">
+					<div class="form-group col-xs-6 col-sm-3" ng-show="item.data.mm">
+						<label>Metronome</label>
+						<p>{{item.data.mm}} bpm</p>
+					</div>
+					<div class="form-group col-xs-6 col-sm-3" ng-show="item.data.key">
+						<label>Keys</label>
+						<p>{{item.data.key}}</p>
+					</div>
+					<div class="form-group col-xs-12 col-sm-6" ng-show="item.data.standardStructure">
+						<label>Structure</label>
+						<p>{{item.data.standardStructure}}</p>
+					</div>
+				</div>
+				<div class="form-group" ng-show="item.data.firstLine.length">
+					<label>First Line</label>
+					<p>{{item.data.firstline}}</p>
+				</div>
+			</accordion-body>
+		</accordion>
+
+		<accordion ng-show="item.data.sheetMusic.length">
+			<accordion-title>
+				Sheet Music
+			</accordion-title>
+			<accordion-body>
+				<div class="list-group">
+					<a class="list-group-item" ng-repeat="file in item.data.sheetMusic" ng-href="{{$root.asset.downloadUrl(file._id, {extension:file.extension})}}" target="_blank">
+						<i class="fa fa-download pull-right"></i>
+						{{file.title}}
+					</a>
+				</div>
+			</accordion-body>
+		</accordion>
+
+
+		<accordion ng-show="item.data.videos.length">
+			<accordion-title>
+				Videos
+			</accordion-title>
+			<accordion-body>
+				<div ng-repeat="video in item.data.videos">
+					<fluro-video ng-model="video"></fluro-video>
+				</div>
+			</accordion-body>
+		</accordion>
+
+
+		<accordion ng-show="item.data.lyrics.length">
+			<accordion-title>
+				Lyrics
+			</accordion-title>
+			<accordion-body>
+				<div class="list-group-item" ng-repeat="section in item.data.lyrics">
+					<h5>{{section.title}}</h5>
+					<div compile-html="section.words" style="white-space:pre"></div>
+				</div>
+			</accordion-body>
+		</accordion>
+	</div>
+	<div ng-switch-default>
+		<div class="wrapper-sm">
+			<div class="container-fluid">
+				<div class="text-wrap">
+					<div view-extended-fields item="item" definition="definition" ></div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+

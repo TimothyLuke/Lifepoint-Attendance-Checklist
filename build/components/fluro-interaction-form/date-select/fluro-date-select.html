@@ -1,0 +1,8 @@
+<div ng-controller="FluroDateSelectController">
+	<div class="input-group">
+		<input type="text" class="form-control" datepicker-popup="{{format}}" ng-model="model[options.key]" is-open="opened" min-date="to.minDate" max-date="to.maxDate" datepicker-options="dateOptions" date-disabled="disabled(date, mode)" ng-required="to.required" close-text="Close" />
+		<span class="input-group-btn">
+		<button type="button" class="btn btn-default" ng-click="open($event)"><i class="fa fa-calendar"></i></button>
+		</span>
+	</div>
+</div>

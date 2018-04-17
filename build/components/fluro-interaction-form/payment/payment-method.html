@@ -1,0 +1,54 @@
+<hr/>
+<div class="payment-method-select">
+
+	
+	<div ng-if="!settings.showOptions">
+
+		<h3 class="clearfix" >{{selected.method.title}}
+			<em class="pull-right small" ng-click="settings.showOptions = !settings.showOptions">Other payment options <i class="fa fa-angle-right"></i></em>
+		</h3>
+		<!-- <h4>
+			<span>{{selected.method.title}} </span>
+		</h4> -->
+	</div>
+
+	<div ng-if="settings.showOptions">
+	
+		<h3 class="clearfix">
+		Select payment method
+					<em ng-click="settings.showOptions = false" class="pull-right small">Back <i class="fa fa-angle-up"></i></em>
+
+		</h3>
+
+	<div class="payment-method-list list-group">
+		<div class="payment-method-list-item list-group-item" ng-class="{active:method == selected.method}" ng-click="selectMethod(method)" ng-repeat="method in methodOptions">
+			<h5 class="title">{{method.title}}</h5>
+		</div>
+	</div>
+
+	</div>
+
+
+
+	<div ng-if="!settings.showOptions">	
+<!-- 
+<select ng-model="model[options.key].method" class="form-control">
+		<option value="">Pay with Card</option>
+		<option value="{{method.key}}" ng-repeat="method in settings.paymentMethods">{{method.title}}</option>
+	</select> 
+-->
+
+
+<div ng-if="selected.method.key == 'card'">
+
+
+      <formly-form model="model" fields="options.data.fields"></formly-form>
+</div>
+
+<div ng-if="selected.method == method && selected.method.description.length" ng-repeat="method in methodOptions">
+	<div compile-html="method.description"></div>
+</div>
+
+</div>
+</div>
+<hr/>

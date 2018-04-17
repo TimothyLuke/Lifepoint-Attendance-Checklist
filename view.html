@@ -1,0 +1,112 @@
+<div>
+	<div printable="item.title">
+		<div class="plan-summary">
+			<div class="plan-header clearfix">
+				<div class="visible-print-block">
+					<h3 ng-if="event">{{event.title}} <div ng-if="item.status != \'active\'" class="label label-warning pull-right">{{item.status}}</div></h3>
+					<!--<h4>{{item.title}} </h4>-->
+					<h5 ng-if="event">{{event.startDate | formatDate:\'l j F Y\'}}
+						<em class="small">(Plan starts at {{item.startDate | formatDate:\'g:ia\'}})</em>
+					</h5>
+					<h5 ng-if="!event">Plan starts at {{item.startDate | formatDate:\'g:ia l j F Y\'}}</h5>
+				</div>
+			</div>
+			
+			
+			
+			<div class="plan-options hidden-print">
+				<div class="form-inline">
+					<label>Show</label>
+					<div class="team-checkbox-group" ng-repeat="team in item.teams">
+						<div ng-if="!isBlankColumn(team)">
+							<a class="btn btn-checkbox" ng-click="toggleContext(team)" ng-class="{\'active\':!contextIsActive(team)}">
+								<i class="fa fa-check"></i>
+							</a><span>{{team}}</span>
+						</div>
+						<div class="text-muted" ng-if="isBlankColumn(team)">
+							No {{team}}
+						</div>
+					</div>
+					
+					<div class="team-checkbox-group hidden-xs" ng-if="event">
+						<a class="btn btn-checkbox" ng-click="item.showTeamOnSide = !item.showTeamOnSide" ng-class="{\'active\':item.showTeamOnSide}">
+							<i class="fa fa-check"></i>
+						</a><span>Show team on side</span>
+					</div>
+					
+				</div>
+			</div>
+			
+			<div class="row">
+				<div ng-class="{\'col-sm-10\':item.showTeamOnSide, \'col-sm-12\':!item.showTeamOnSide}">
+					<div class="table-responsive">
+						<table class="table table-bordered table-striped">
+							<thead>
+								<tr>
+									<th><i class="fa fa-time"></i> Time</th>
+									<th>Details</th>
+									<th class="note" ng-class="{\'hidden\':contextIsActive(team) || isBlankColumn(team)}" ng-repeat="team in item.teams">
+										{{team}}
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr ng-repeat="schedule in item.schedules track by $index">
+									<td class="note note-time">
+										<div ng-if="schedule.duration">
+											<strong>{{estimateTime(item.startDate, item.schedules, schedule) | formatDate:\'g:ia\' }}</strong>
+											<div class="small"><em ng-if="schedule.duration" class="text-muted">{{schedule.duration}} mins</em></div>
+										</div>
+									</td>
+									
+									<td class="note note-detail">
+										<div ng-if="schedule.title || schedule.detail">
+											<strong>{{schedule.title}}</strong><br/>
+											<div class="wrap-normal" compile-html="schedule.detail">
+											</div>
+										</div>
+									</td>
+									<td class="note" ng-class="{\'hidden\':contextIsActive(team) || isBlankColumn(team)}" ng-repeat="team in item.teams">
+										<div class="wrap-normal" compile-html="schedule.notes[team]"></div>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
+				
+				<!-- team -->
+				<div ng-if="item.showTeamOnSide && event" class="col-sm-2">
+					<div class="panel panel-default">
+						<div class="table-responsive">
+							<table class="table table-striped">
+								<thead>
+									<th><i class="fa fa-contact"></i> Team</th>
+								</thead>
+								<tbody>
+									<tr ng-repeat="assignment in event.assignments">
+										<td class="note">
+											
+											<strong>{{assignment.title}}</strong>
+											
+											<div class="text-capitalize" ng-repeat="contact in assignment.contacts">
+												{{contact.title}}
+											</div>
+											
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</div>
+				<!-- end team-->
+			</div>
+		</div>
+	</div>
+</div>
+
+
+
+
+

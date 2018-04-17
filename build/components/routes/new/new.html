@@ -1,0 +1,97 @@
+<div class="wrapper new">
+    <div ng-switch="settings.state">
+        <div ng-switch-when="processing">
+            <div class="text-center">
+                <i class="fa fa-spinner fa-spin fa-3x"></i>
+            </div>
+            <div class="container">
+                <div class="text-center">
+                    <div class="wrapper">
+                        <h2>Processing</h2>
+                        <p class="text-muted help-block"><em>Please wait</em></p>
+                    </div>
+                </div>
+            </div> 
+        </div>
+            
+        <div ng-switch-when="failed">
+            <div class="text-center">
+                <i class="fa fa-frown-o fa-3x"></i>
+            </div>
+            <div class="container">
+                <div class="text-center">
+                    <div class="wrapper">
+                        <h2>There was a problem saving new contact</h2>
+                        <p class="text-muted help-block"><em>Click below to return to the previous screen</em></p>
+                    </div>
+                    <a class="btn btn-primary btn-sm" ng-click="settings.state = 'ready'">Go back</a>
+                </div>
+            </div>
+        </div>
+            
+        <div ng-switch-when="success">
+            <div class="text-center">
+                <i class="fa fa-smile-o fa-3x"></i>
+            </div>
+            <div class="container">
+                <div class="text-center">
+                    <div class="wrapper">
+                        <h2>Contact created successfully</h2>
+                        <p class="text-muted help-block"><em>You can now check in {{settings.result.firstName}}</em></p>
+                    </div>
+                    <!-- <a class="btn btn-primary btn-sm"  ui-sref="checklist({id:$root.$stateParams.returnTo})">Back</a> -->
+                    <a class="btn btn-primary btn-sm" ng-click="$root.breadcrumb.back()">Return to event</a>
+                    <a class="btn btn-default btn-sm" ng-click="settings.state = 'ready'">Add another contact</a>
+                </div>
+            </div>
+        </div>
+        
+        <div ng-switch-default class="container">
+            <div class="text-wrap">
+                <h3>Add a new contact</h3><br/>
+                <form ng-submit="submitForm()">
+                    
+                    <div class="row">
+                        <div class="form-group col-sm-4">
+                            <label>First Name</label>
+                            <input placeholder="First Name" ng-model="contact.firstName" class="form-control"/>
+                        </div>
+                        
+                        <div class="form-group col-sm-5">
+                            <label>Last Name</label>
+                            <input placeholder="Last Name" ng-model="contact.lastName" class="form-control"/>
+                        </div>
+                        
+                        <div class="form-group col-sm-3">
+                            <label>Gender</label>
+                            <select ng-model="contact.gender" class="form-control">
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                            </select>
+                        </div>
+                    </div> 
+                    
+                    <div class="row">
+                        <div class="form-group col-sm-6">
+                            <label>Phone Number</label>
+                            <input placeholder="Phone Number" ng-model="contact.phoneNumbers[0]" class="form-control"/>
+                        </div>
+                        
+                        <div class="form-group col-sm-6">
+                            <label>Email Address</label>
+                            <input placeholder="Email Address" type="email" ng-model="contact.emails[0]" class="form-control"/>
+                        </div>
+                    </div>
+                        
+                    <button class="btn btn-primary">
+                        <span>Submit</span>
+                        <i class="fa fa-angle-right"></i>
+                    </button>
+                    <a class="btn btn-default" ng-click="$root.breadcrumb.back()">
+                        <span>Cancel</span>
+                    </a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

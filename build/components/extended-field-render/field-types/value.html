@@ -1,0 +1,31 @@
+<div ng-switch="field.type">
+
+	<div class="content-select" ng-switch-when="reference">
+		<div class="content-list list-group">
+			<div class="list-group-item clearfix" ng-init="item = model[field.key]">
+				<a ui-sref="viewContent({id:item._id})">
+					<div class="pull-left">
+						<img ng-if="item._type == 'image'" ng-src="{{$root.getThumbnailUrl(item._id)}}"/>					
+						<i ng-if="item._type != 'image'" class="fa fa-{{item._type}}"></i>
+						<span>{{item.title}}</span>
+					</div>
+				</a>
+
+
+
+				<div class="actions pull-right btn-group">
+					<a class="btn btn-tiny btn-xs" ng-if="item.assetType == 'upload'" target="_blank" ng-href="{{$root.getDownloadUrl(item._id)}}"><i class="fa fa-download"></i></a>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div ng-switch-when="date">
+		{{model[field.key] | formatDate:'j M Y'}}
+	</div>
+	<div ng-switch-when="image">
+		<img ng-src="{{$root.asset.imageUrl(item._id)}}"/>
+	</div>
+	<div ng-switch-default>
+		<div ng-bind-html="model[field.key] | trusted"></div>
+	</div>
+</div>

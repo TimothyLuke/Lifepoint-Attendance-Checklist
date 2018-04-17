@@ -1,0 +1,42 @@
+
+.preload-image-outer {
+	position: relative;
+
+	&.aspect-ratio {
+		// background: rgba(#000,0.03);
+		height:0;
+		overflow: hidden;
+
+		img {
+			left:0;
+			top:0;
+			width:100%;
+			position: absolute;
+		}
+	}
+
+	img {
+		width:100%;
+		height: auto;
+		@include transition(opacity 0.5s);
+		&.preload-hide {
+			opacity: 0;
+		}
+
+		&.preload-show {
+			opacity:1
+		}
+	}
+
+	.image-preloader {
+		position: absolute;
+		top:50%;
+		left: 50%;
+		color: rgba(#000, 0.5);//$brand-primary;
+		width: 24px;
+		height: 24px;
+		line-height: 24px;
+		text-align: center;
+		margin: -12px 0 0 -12px;
+	}
+}

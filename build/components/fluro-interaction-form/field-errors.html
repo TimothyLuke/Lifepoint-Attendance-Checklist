@@ -1,0 +1,40 @@
+<!--<formly-transclude></formly-transclude>-->
+
+<div class="field-errors" ng-if="fc.$touched && fc.$invalid">
+	<div ng-show="fc.$error.required" class="alert alert-danger" role="alert">
+	  <span class="fa fa-exclamation" aria-hidden="true"></span>
+	  <span class="sr-only">Error:</span>
+	  {{to.label}} is required.
+	</div>
+
+	<div ng-show="fc.$error.validInput" class="alert alert-danger" role="alert">
+	  <span class="fa fa-exclamation" aria-hidden="true"></span>
+	  <span class="sr-only">Error:</span>
+
+
+	  <span ng-if="!to.errorMessage.length">'{{fc.$viewValue}}' is not a valid value</span>
+	  <span ng-if="to.errorMessage.length">{{to.errorMessage}}</span>
+	</div>
+
+
+
+	<div ng-show="fc.$error.email" class="alert alert-danger" role="alert">
+	  <span class="fa fa-exclamation" aria-hidden="true"></span>
+	  <span class="sr-only">Error:</span>
+	  <span>'{{fc.$viewValue}}' is not a valid email address</span>
+	</div>
+
+
+
+
+<!-- 
+<formly-transclude></formly-transclude>
+      <div ng-messages="fc.$error" ng-if="form.$submitted || options.formControl.$touched" class="error-messages">
+        <div ng-message="{{ ::name }}" ng-repeat="(name, message) in ::options.validation.messages" class="message">{{ message(fc.$viewValue, fc.$modelValue, this)}}</div>
+      </div> -->
+
+
+
+
+</div>
+

@@ -1,0 +1,795 @@
+$wrapper-padding: 100px !default;
+$wrapper-padding-xs: floor($wrapper-padding / 3) !default;
+$wrapper-padding-sm: floor($wrapper-padding / 2) !default;
+$wrapper-padding-lg: floor($wrapper-padding * 2) !default;
+$wrapper-padding-xl: floor($wrapper-padding * 3) !default;
+
+
+//////////////////////////////////////////////////////
+
+.no-select {
+  -webkit-touch-callout: none; /* iOS Safari */
+  -webkit-user-select: none;   /* Chrome/Safari/Opera */
+  -khtml-user-select: none;    /* Konqueror */
+  -moz-user-select: none;      /* Firefox */
+  -ms-user-select: none;       /* Internet Explorer/Edge */
+  user-select: none;           /* Non-prefixed version, currently not supported by any browser */
+}
+
+
+/////////////////////////////////////////////////
+
+.brand-warning {
+    color: $brand-warning;   
+}
+
+.brand-danger {
+    color: $brand-danger;   
+}
+
+.brand-primary {
+    color: $brand-primary;   
+}
+
+.brand-success {
+    color: $brand-success;   
+}
+
+
+
+/////////////////////////////////////////////////////////
+
+.border-bottom {
+    border-bottom: 1px solid rgba($gray-base,0.08);
+}
+
+.border-top {
+    border-top: 1px solid rgba($gray-base,0.08);
+}
+
+.border-right {
+    border-right: 1px solid rgba($gray-base,0.08);
+}
+
+.border-left {
+    border-left: 1px solid rgba($gray-base,0.08);
+}
+
+.bordered {
+    @extend .border-left;
+    @extend .border-right;
+    @extend .border-top;
+    @extend .border-bottom;
+}
+
+
+
+hr {
+    @extend .border-top;
+    margin: ($wrapper-padding/2) 0;
+}
+
+//////////////////////////////////////////////////////
+
+$headings: 'h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5, h6, .h6';
+
+#{$headings} {
+    i {
+        margin-right: 10px;
+    }
+    
+    &.title {
+        margin:0;
+        line-height:1;
+    }
+    
+    &.color {
+        color: $brand-primary;
+    }
+    
+    .text-muted {
+        font-weight:200;
+    }
+    
+    .small {
+        color:inherit;
+    }
+}
+
+//////////////////////////////////////////////////////
+
+
+.small {
+    font-size: 0.9em;
+}
+
+.tiny {
+    font-size: 0.8em;
+}
+
+//////////////////////////////////////////////////////
+
+.cover {
+    background-size:cover;
+    background-repeat:no-repeat;
+    background-position:center center;
+}
+
+.color {
+    color: $brand-primary;
+}
+
+//////////////////////////////////////////////////////
+
+
+body.modal-open {
+    overflow:hidden;
+}
+
+
+//////////////////////////////////////////////////////
+
+
+[compile-html] {
+    img {
+        max-width: 100%;
+    }
+}
+
+//////////////////////////////////////////////////////
+
+ $wrapper-title-fraction: 0.75 !default;
+
+//Wrappers for padding
+.wrapper-md,
+.wrapper {
+    @media (max-width: $screen-xs-max) { 
+        padding: floor($wrapper-padding/3) 0; 
+        .wrapper-title {
+            margin:0 0 (floor($wrapper-padding/3) * $wrapper-title-fraction ) ;
+        }
+    }
+    
+    @media (min-width: $screen-sm-min) { 
+        padding: floor($wrapper-padding/1.4) 0; 
+        .wrapper-title {
+             margin:0 0 (floor($wrapper-padding/1.4) * $wrapper-title-fraction ) ;
+        }
+    }
+    @media (min-width: $screen-md-min) { 
+        padding: $wrapper-padding 0; 
+        .wrapper-title {
+             margin:0 0 ($wrapper-padding * $wrapper-title-fraction) ;
+        }
+    }
+    
+    @extend .cover;
+}
+
+.wrapper-sm {
+    @media (max-width: $screen-xs-max) { 
+        padding: floor($wrapper-padding-sm/3) 0; 
+        .wrapper-title {
+             margin:0 0 (floor($wrapper-padding-sm/3) * $wrapper-title-fraction ) ;
+        }
+    }
+    @media (min-width: $screen-sm-min) { 
+        padding: floor($wrapper-padding-sm/1.4) 0; 
+        .wrapper-title {
+             margin:0 0 (floor($wrapper-padding-sm/1.4) * $wrapper-title-fraction ) ;
+        }
+    }
+    @media (min-width: $screen-md-min) { 
+        padding: $wrapper-padding-sm 0; 
+        .wrapper-title {
+            margin:0 0 ($wrapper-padding-sm * $wrapper-title-fraction ) ;
+        }
+    }
+    @extend .cover;
+}
+
+.wrapper-xs {
+    @media (max-width: $screen-xs-max) { 
+        padding: floor($wrapper-padding-xs/3) 0; 
+        .wrapper-title {
+           margin:0 0 (floor($wrapper-padding-xs/3) * $wrapper-title-fraction ) ;
+        }
+    }
+    @media (min-width: $screen-sm-min) { 
+        padding: floor($wrapper-padding-xs/1.4) 0; 
+        .wrapper-title {
+           margin:0 0 (floor($wrapper-padding-xs/1.4) * $wrapper-title-fraction ) ;
+        }
+    }
+    @media (min-width: $screen-md-min) { 
+        padding: $wrapper-padding-xs 0; 
+        .wrapper-title {
+            margin:0 0 ($wrapper-padding-xs * $wrapper-title-fraction) ;
+        }
+    }
+    @extend .cover;
+}
+
+.wrapper-lg {
+    @media (max-width: $screen-xs-max) { 
+        padding: floor($wrapper-padding-lg/3) 0; 
+        .wrapper-title {
+             margin:0 0 (floor($wrapper-padding-lg/3) * $wrapper-title-fraction);
+        }
+    }
+    @media (min-width: $screen-sm-min) { 
+        padding: floor($wrapper-padding-lg/1.4) 0; 
+        .wrapper-title {
+            margin:0 0 (floor($wrapper-padding-lg/1.4) * $wrapper-title-fraction);
+        }
+    }
+    @media (min-width: $screen-md-min) { 
+        padding: $wrapper-padding-lg 0;
+        .wrapper-title {
+           margin:0 0 ($wrapper-padding-lg * $wrapper-title-fraction) ;
+        }
+    }
+    @extend .cover;
+}
+
+.wrapper-xl {
+    @media (max-width: $screen-xs-max) { 
+        padding: floor($wrapper-padding-xl/3) 0; 
+        .wrapper-title {
+            margin:0 0 (floor($wrapper-padding-xl/3) * $wrapper-title-fraction);
+        }
+    }
+    @media (min-width: $screen-sm-min) { 
+        padding: floor($wrapper-padding-xl/1.4) 0; 
+        .wrapper-title {
+            margin:0 0 (floor($wrapper-padding-xl/1.4) * $wrapper-title-fraction);
+        }
+    }
+    @media (min-width: $screen-md-min) { 
+        padding: $wrapper-padding-xl 0; 
+        .wrapper-title {
+             margin:0 0 ($wrapper-padding-xl * $wrapper-title-fraction) ;
+        }
+    }
+    @extend .cover;
+}
+
+
+//////////////////////////////////////////////////////
+
+ul.list-inline,
+ul.list-inline li {
+  display:inline-block;
+  margin:0;
+  padding:0;
+  list-style-type:none;
+  vertical-align:top;
+}
+
+//////////////////////////////////////////////////////
+
+// .curtain {
+//     min-height: 100vh;
+//     overflow: auto;
+// }
+
+.bg-image {
+    background: #000;
+    background-size: cover;
+    background-position: center center;
+}
+
+.curtain-bg {
+    @extend .bg-image;
+    background-color: #111;
+    color: #fff;
+}
+
+.curtain {
+    min-height: 100vh;
+    overflow: auto;
+    position: relative;
+    
+    //Flexbox center
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    transition: all 0.4s;
+    
+    .curtain-header {
+        position: absolute;
+        left:0;
+        top:0;
+        width: 100%;
+    }
+   
+    .curtain-content {
+        width: 100%;
+    }
+    
+    .curtain-footer {
+        position: absolute;
+        left:0;
+        bottom:0;
+        width: 100%;
+    }
+    
+    &.half {
+        min-height: 50vh !important;
+    }
+    
+    &.three-quarter {
+        min-height: 80vh !important;
+    }
+}
+
+
+
+//////////////////////////////////////////////////////
+
+::-moz-selection { background: rgba($brand-primary, 0.2);}
+::selection { background: rgba($brand-primary, 0.2); }
+
+//////////////////////////////////////////////////////
+
+#loading-bar .bar {
+    background: $brand_primary;
+    height:5px;
+}
+
+
+#loading-bar-spinner .spinner-icon {
+  border:  solid 2px transparent;
+  border-top-color:  $brand_primary;
+  border-left-color: $brand_primary;
+}
+
+//////////////////////////////////////////////////////
+
+.text-muted {
+    opacity:0.5;
+    color: inherit;
+}
+
+//////////////////////////////////////////////////////
+
+.text-wrap {
+    max-width: 700px;
+    margin:auto;
+    
+    &.left {
+        margin:0;
+    }
+}
+
+textarea { 
+   resize:vertical; /*prevents textarea fields from resizing horizontally*/
+}
+
+
+pre {
+    text-align:left;
+}
+//////////////////////////////////////////////////////
+
+
+p.lead {
+    margin-bottom: $font-size-base * 1.4;
+}
+
+//////////////////////////////////////////////////////
+
+
+a,
+.btn {
+    i {
+        &:first-child {
+            margin-right:10px;
+        }
+        
+        &:last-child {
+            margin-left:10px;
+        }
+        
+        &:only-child {
+            margin:0;
+        }
+    }
+}
+
+//////////////////////////////////////////////////////
+
+a,
+[ng-click] {
+    cursor:pointer;
+}
+
+//////////////////////////////////////////////////////
+
+.btn {
+    padding: 9px 14px;
+    margin-right: 1em;
+    cursor:pointer;
+     
+    &:last-child {
+        margin-right:0;
+    }
+}
+
+.btn-group .btn {
+    margin-right:0;
+}
+
+.btn-xs {
+    padding: 5px 10px;
+    font-size: 0.7em;
+}
+
+.btn-sm {
+    padding: 8px 17px;
+    font-size: 0.8em;
+}
+
+.btn-lg {
+    padding: 14px 23px;
+    font-size: 1.3em;
+}
+
+.btn-xl {
+    padding: 15px 25px;
+    font-size: 1.4em;
+}
+
+.btn-block {
+    margin-bottom: 15px;
+    
+    &:last-child {
+        margin:0;
+    }
+}
+
+
+.btn-block-xs {
+    @media (max-width:$screen-xs-max) {
+        display: block;
+        width: 100%;
+        margin-bottom: 15px;
+        
+        &:last-child {
+            margin:0;
+        }
+    }
+}
+
+
+
+
+//////////////////////////////////////////////////////
+
+.relative-wrapper {
+    position:relative;
+    overflow:hidden;
+    
+    .relative-bg {
+        position:absolute;
+        left:0;
+        top:0;
+        width: 100%;
+        height: 100%;
+        z-index:0;
+        background-size:cover;
+        
+        .carousel,
+        .carousel-inner,
+        .item{
+            height: 100%;
+        }
+       
+        .slide{
+            width: 100%;
+            height: 100%;
+            background-size:cover;
+            display:block;
+            
+            img {
+                width: 100%;
+                height:auto;
+                display:block;
+            }
+        }
+        
+        .carousel-control,
+        .carousel-indicators {
+            display:none;
+        }
+    }
+    
+    .relative-fg {
+        position: relative;
+        z-index: 1;
+    }
+}
+
+
+
+//////////////////////////////////////////////////////
+
+.row {
+
+    & > [class^="col-"],
+    & > [class*=" col-"] {
+        &.stacked {
+            padding-bottom: $grid-gutter-width;
+        }
+        
+        &.stacked-xs {
+            @media(max-width: $screen-xs-max) {
+                padding-bottom: $grid-gutter-width;
+            }
+        }
+        
+        &.stacked-sm {
+            @media(min-width: $screen-sm-min) and (max-width: $screen-sm-max) {
+                padding-bottom: $grid-gutter-width;
+            }
+        }
+        
+        &.stacked-md {
+            @media(min-width: $screen-md-min) and (max-width: $screen-md-max) {
+                padding-bottom: $grid-gutter-width;
+            }
+        }
+        
+        &.stacked-lg {
+            @media(min-width: $screen-lg-min) {
+                padding-bottom: $grid-gutter-width;
+            }
+        }
+    }
+        
+        
+    &.no-gutters {
+        margin-right: 0;
+        margin-left: 0;
+      
+        & > [class^="col-"],
+        & > [class*=" col-"] {
+          padding-right: 0;
+          padding-left: 0;
+        }
+    }
+    
+    &.row-inline {
+        & > [class^="col-"],
+        & > [class*=" col-"] {
+          display:inline-block;
+          float:none;
+          vertical-align:top;
+        }
+    }
+    
+    &.row-flex {
+        display:flex;
+        // flex-wrap: wrap;
+        width:100%;
+        margin-right: 0;
+        margin-left: 0;
+        
+        & > [class^="col-"],
+        & > [class*=" col-"]  {
+            display: flex;
+            flex-direction: column;
+            padding-right: 0;
+            padding-left: 0;
+        }
+        
+        &.flex-gutters {
+            padding: 0 15px;
+            
+            & > [class^="col-"],
+            & > [class*=" col-"]  {
+                padding-right: 15px;
+                padding-left: 15px;
+            }
+        }
+        
+        &:after,
+        &:before {
+            display:block !important;
+        }
+        
+        @media(max-width: $screen-xs-max) {
+            display:block;
+        }
+    }
+    
+    &.row-center {
+        @extend .row-inline;
+        @extend .text-center;
+    }
+}
+
+
+//////////////////////////////////////////////////////
+
+// Shortcuts for changing display property on various screen sizes
+//XS
+.display-xs-block {
+    @media(max-width: $screen-xs-max) {
+        display:block;
+    }    
+}
+
+.display-xs-inline {
+    @media(max-width: $screen-xs-max) {
+        display:inline;
+    }    
+}
+
+.display-xs-inline-block {
+    @media(max-width: $screen-xs-max) {
+        display:inline-block;
+    }    
+}
+
+//////////////////////////////////////////////////////
+
+//SM
+.display-sm-block {
+    @media(min-width: $screen-sm-min) {
+        display:block;
+    }    
+}
+
+.display-sm-inline {
+    @media(min-width: $screen-sm-min) {
+        display:inline;
+    }    
+}
+
+.display-sm-inline-block {
+    @media(min-width: $screen-sm-min) {
+        display:inline-block;
+    }    
+}
+
+//////////////////////////////////////////////////////
+
+//MD
+.display-md-block {
+    @media(min-width: $screen-md-min) {
+        display:block;
+    }    
+}
+
+.display-md-inline {
+    @media(min-width: $screen-md-min) {
+        display:inline;
+    }    
+}
+
+.display-md-inline-block {
+    @media(min-width: $screen-md-min) {
+        display:inline-block;
+    }    
+}
+
+
+//////////////////////////////////////////////////////
+
+//LG
+.display-lg-block {
+    @media(min-width: $screen-lg-min) {
+        display:block;
+    }    
+}
+
+.display-lg-inline {
+    @media(min-width: $screen-lg-min) {
+        display:inline;
+    }    
+}
+
+.display-lg-inline-block {
+    @media(min-width: $screen-lg-min) {
+        display:inline-block;
+    }    
+}
+
+
+//////////////////////////////////////////////////////
+
+//Responsive Text Align overrides
+@media(max-width: $screen-xs-max) {
+    .text-xs-left {
+        text-align:left;
+    }
+    
+    .text-xs-right {
+        text-align:right;
+    }
+}
+
+@media(min-width: $screen-sm-min) {
+    .text-sm-left {
+        text-align:left;
+    }
+    
+    .text-sm-right {
+        text-align:right;
+    }
+}
+
+@media(min-width: $screen-md-min) {
+    .text-md-left {
+        text-align:left;
+    }
+    
+    .text-md-right {
+        text-align:right;
+    }
+}
+
+@media(min-width: $screen-lg-min) {
+    .text-lg-left {
+        text-align:left;
+    }
+    
+    .text-lg-right {
+        text-align:right;
+    }
+}
+
+//////////////////////////////////////////////////////
+
+.button-select-buttons {
+    a {
+        i {
+            opacity:0;
+        }
+        
+        &:hover i {
+            opacity:0.5;
+        }
+        
+        &.active i {
+            opacity:1;
+        }
+    }
+}
+
+//////////////////////////////////////////////////////
+
+
+.carousel-fade {
+    .carousel-inner {
+        .item {
+            transition: opacity 1s;
+            transform: translate3d(0,0,0) !important;
+        }
+        
+        .item,
+        .active.left,
+        .active.right {
+            opacity: 0;
+        }
+
+        .active,
+        .next.left,
+        .prev.right {
+            opacity: 1;
+        }
+
+        .next,
+        .prev,
+        .active.left,
+        .active.right {
+            left: 0;
+        }
+    }
+
+    .carousel-control {
+        z-index: 2;
+    }
+}

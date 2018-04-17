@@ -1,0 +1,27 @@
+<div class="dateselect" ng-class="{open:settings.open}">
+	<div class="btn-group">
+		<a class="btn btn-default" ng-class="{active:settings.open}" ng-click="settings.open = !settings.open">
+			<i class="fa fa-calendar"></i>
+			<span ng-bind-html="readable | trusted"></span>
+		</a>
+		<!-- <a class="btn btn-default" ng-if="boundModel && !forceDate" ng-click="removeDate()">
+			<i class="fa fa-times"></i>
+		</a> -->
+	</div>
+	
+
+	<dpiv class="popup">
+		<div class="datetime">
+			<!-- <pre>{{settings.dateModel | json}}</pre> -->
+			<!-- <admin-time-select ng-if="useTime" class="timepicker" ng-model="settings.model" init-date="initDate"></admin-time-select> -->
+			<!-- <datepicker class="datepicker" ng-model="settings.model" init-date="initDate" min-date="minDate" show-weeks="false"></datepicker> -->
+			<!-- <pre>{{boundModel}}</pre> -->
+			<!-- <admin-time-select ng-if="useTime" class="timepicker" ng-model="settings.dateModel" init-date="initDate"></admin-time-select> -->
+			<!-- <uib-datepicker-popup class="datepicker" ng-model="settings.dateModel"></uib-datepicker-popup> -->
+			<div uib-datepicker class="datepicker" datepicker-options="datePickerOptions" ng-model="settings.dateModel" ></div>
+
+
+			<!-- <timepicker class="timepicker" ng-model="model" init-date="initDate"  hour-step="1" minute-step="5" show-meridian="true"></timepicker> -->
+		</div>
+	</div>
+</div>

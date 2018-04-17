@@ -1,0 +1,14 @@
+<div class="fluro-input form-group" scroll-active ng-class="{'fluro-valid':isValid(), 'fluro-dirty':isDirty, 'fluro-invalid':!isValid()}">
+	<label><i class="fa fa-check" ng-if="isValid()"></i><i class="fa fa-exclamation" ng-if="!isValid()"></i><span>{{field.title}}</span></label>
+	
+
+	<div class="error-message help-block">
+		<span ng-if="field.errorMessage">{{field.errorMessage}}</span>
+		<span ng-if="!field.errorMessage">Please provide valid input for this field</span>
+	</div>
+
+	<span class="help-block" ng-if="field.description && field.type != 'boolean'">{{field.description}}</span>
+	<div class="fluro-input-wrapper">
+
+	</div>
+</div>

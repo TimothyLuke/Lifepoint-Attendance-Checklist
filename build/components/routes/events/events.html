@@ -1,0 +1,114 @@
+<!--  <div class="wrapper">
+    <div class="container">
+        <div class="wrapper-title">
+            <h1 class="title">Select event</h1>
+            <p class="help-block">Select an event below to mark attendance</p>
+        </div>
+        <a ui-sref="checklist({id:event._id})" class="list-group-item event-list-item" ng-repeat="event in events">
+            <span class="pull-right small text-muted">{{event.startDate | timeago}}</span>
+            <div class="color-block" style="background-color: {{realm.bgColor}}" ng-repeat="realm in event.realms"></div>
+            <strong>{{event.title}}</strong><br/>
+            <em class="text-muted small">{{event.startDate | formatDate:'g:ia l j M'}} - {{event.realms[0].title}}</em>
+        </a>
+    </div>
+</div>
+ -->
+
+
+<!-- Header -->
+<div class="bg-white border-bottom">
+    <div class="wrapper-sm">
+        <div class="container-fluid">
+            <div class="text-wrap">
+                <h1 class="title">Select event</h1>
+                <p class="help-block">Select an event below to mark attendance</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search -->
+<div class="search-row border-bottom">
+    <div class="text-wrap">
+        <div class="input-group" style="margin-bottom: 0">
+            <input ng-model="search.terms" class="form-control" placeholder="Search {{::events.length}} events"/>
+            <div class="input-group-addon" ng-click="search.terms = ''">
+                <i class="fa" ng-class="{'fa-search':!search.terms.length, 'fa-times':search.terms.length}"></i>
+            </div>
+            <div class="input-group-addon" ng-class="{active:search.showFilters}" ng-click="search.showFilters = !search.showFilters">
+                <i class="fa fa-ellipsis-v"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="wrapper-sm filter-bg border-bottom" ng-if="search.showFilters">
+    <div class="container">
+        <div class="text-wrap">
+            <div class="row row-inline">
+                <div class="form-group col-xs-6">
+                    <label>Tags <span class="text-muted">{{::tags.length}}</span></label>
+                    <select ng-model="search.filters.tags" class="form-control">
+                        <option value="">Any</option>
+                        <option value="{{::tag._id}}" ng-repeat="tag in tags">{{::tag.title}}</option>
+                    </select>
+                </div>
+
+                <div class="form-group col-xs-6">
+                    <label>Realms <span class="text-muted">{{::realms.length}}</span></label>
+                    <select ng-model="search.filters.realms" class="form-control">
+                        <option value="">Any</option>
+                        <option value="{{::realm._id}}" ng-repeat="realm in realms">{{::realm.title}}</option>
+                    </select>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+<!-- Events list -->
+<div class="wrapper-sm">
+    <div class="container-fluid">
+        <div class="text-wrap">
+<!--             <div class="search-help" ng-show="search.terms.length || search.filters.realms || search.filters.tags">
+ -->            <div class="search-help" ng-show="filteredItems.length < 1">
+                {{filteredItems.length}} match<span ng-if="filteredItems.length != 1">es</span> <span ng-show="search.terms.length">'{{search.terms}}'</span>
+            </div>
+
+            <div infinite-pager items="dates" per-page="10">
+                <div ng-repeat="page in pages">
+                    <div class="panel panel-event-day" ng-repeat="day in page">
+                        <div class="panel-heading">
+                            <i class="fa fa-calendar fa-fw "></i> {{::day.date | formatDate:'l j M Y'}}
+                        </div>
+                        <div>
+                            <div class="row row-flex panel-event-day-row" ng-repeat="timeslot in day.times | filter:search.terms track by timeslot.time">
+                                <div class="col-xs-2  bg-light">
+                                    <div class="assignment-time">
+                                        {{::timeslot.time}}
+                                    </div>
+                                </div>
+                                <div class="col-xs-10 border-left">
+                                    <div>
+                                        <a ui-sref="checklist({id:event._id})" ng-repeat="event in timeslot.events | filter:search.terms track by event._id" class="timeslot-row">
+                                            <div ng-repeat="realm in event.realms" class="realm-bar" style="background-color:{{::realm.bgColor}};"></div>
+
+                                            <h6 class="title"><strong>{{::event.title}}</strong></h6>
+                                            <div class="small text-muted">{{::event.firstLine}}</div>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+

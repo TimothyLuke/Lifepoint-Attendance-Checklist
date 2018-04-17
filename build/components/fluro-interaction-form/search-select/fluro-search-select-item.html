@@ -1,0 +1,5 @@
+<a class="clearfix">
+	<i class="fa fa-{{match.model._type}}"></i>
+	<span ng-bind-html="match.label | trusted | typeaheadHighlight:query"></span>
+	<span ng-if="match.model._type == 'event' || match.model._type == 'plan'" class="small text-muted">// {{match.model.startDate | formatDate:'jS F Y - g:ia'}}</span>
+</a>

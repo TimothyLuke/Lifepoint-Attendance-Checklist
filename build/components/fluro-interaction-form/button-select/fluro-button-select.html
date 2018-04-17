@@ -1,0 +1,10 @@
+<div id="{{options.id}}" class="button-select {{to.definition.directive}}-buttons" ng-model="model[options.key]">
+	<a ng-repeat="(key, option) in to.options" ng-class="{active:contains(option.value)}" class="btn btn-default" id="{{id + '_'+ $index}}" ng-click="toggle(option.value)">
+	<span>{{option.name}}</span><i class="fa fa-check"></i>
+	</a>
+</div>
+
+
+
+
+

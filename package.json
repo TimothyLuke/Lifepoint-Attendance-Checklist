@@ -1,0 +1,31 @@
+{
+  "name": "fluro-admin",
+  "version": "0.1.0",
+  "author": "Cade Embery",
+  "private": true,
+  "devDependencies": {
+    "connect-modrewrite": "^0.8.3",
+    "grunt": "*",
+    "grunt-angular-templates": "^0.5.7",
+    "grunt-autoprefixer": "*",
+    "grunt-contrib-concat": "^0.5.0",
+    "grunt-contrib-connect": "^1.0.2",
+    "grunt-contrib-copy": "*",
+    "grunt-contrib-cssmin": "^0.11.0",
+    "grunt-contrib-htmlmin": "^0.3.0",
+    "grunt-contrib-uglify": "^0.7.0",
+    "grunt-contrib-watch": "*",
+    "grunt-filerev": "^2.1.2",
+    "grunt-import": "^1.0.3",
+    "grunt-ng-annotate": "^3.0.0",
+    "grunt-open": "^0.2.3",
+    "grunt-sass": "^2.0.0",
+    "grunt-usemin": "*",
+    "grunt-wiredep": "*",
+    "matchdep": "*"
+  },
+  "dependencies": {
+    "grunt-angular-templates": "^0.5.7",
+    "moment": "^2.15.1"
+  }
+}
