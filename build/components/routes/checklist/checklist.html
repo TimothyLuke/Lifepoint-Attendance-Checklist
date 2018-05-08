@@ -7,7 +7,7 @@
                     <h6 class="text-muted">
                         {{event.startDate | formatDate:'g:ia j M Y'}}
                         <em>({{event.startDate | timeago}})</em>
-                    </h6>                            
+                    </h6>
                 </div>
                 <div class="col-xs-3 text-right">
                     <a class="btn btn-primary btn-sm" ui-sref="new({returnTo:event._id, realm:event.realms[0]._id})">
@@ -82,7 +82,7 @@
             </div>
         </div>
     </div>
-</div>    
+</div>
 
 
 <!--Contact list-->
@@ -103,6 +103,9 @@
                     <div class="col-xs-3 col-sm-offset-2 col-sm-2 text-right" ng-click="toggle(item)">
                         <i class="fa fa-2x fa-fw" ng-class="{'fa-check-circle':selected(item),  'fa-circle-o':!selected(item) && !isCheckedIn(item), 'fa-check text-muted':isCheckedIn(item)}"></i>
                     </div>
+                </div>
+                <div class="row individual" ng-class="{'active': selected(item)}">
+                  <input class="form-control" model="personcomments" placeholder="{{item.firstName}} {{item.lastName}} notes"/>
                 </div>
             </div>
             <div class="text-center" ng-if="pager.total > pager.itemsPerPage">
