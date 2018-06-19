@@ -251,7 +251,13 @@ app.controller('ChecklistController', function($scope, FluroContent, $filter, No
                 return _.some(contact.tags, {_id:selectedTagID})
             });
         }
+        if ($scope.search.status) {
+            filteredContacts = _.filter(filteredContacts, function(contact) {
 
+                var selectedStatusID = $scope.search.status;
+                return _.some(contact.status, selectedStatusID)
+            });
+        }
         if ($scope.search.groups) {
             filteredContacts = _.filter(filteredContacts, function(contact) {
 
@@ -288,6 +294,21 @@ app.controller('ChecklistController', function($scope, FluroContent, $filter, No
         .compact()
         .uniqBy(function(tag) {
             return tag.title;
+        })
+        .value();
+
+        // ///////////////////////////
+
+        $scope.status = _.chain(filteredContacts)
+        .map(function(contact) {
+            if(contact.status) {
+                return contact.status;
+            }
+        })
+        .flatten()
+        .compact()
+        .uniqBy(function(status) {
+          return status;
         })
         .value();
 

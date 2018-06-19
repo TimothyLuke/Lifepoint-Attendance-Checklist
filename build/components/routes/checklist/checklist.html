@@ -78,6 +78,15 @@
                             </select>
                         </div>
                     </div>
+                    <div class="col-xs-6 col-sm-4">
+                        <div class="filter-block">
+                            <h6>Status</h6>
+                            <select ng-model="search.status" class="form-control">
+                                <option value="">Any</option>
+                                <option value="{{option}}" ng-repeat="option in status">{{option}}</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
