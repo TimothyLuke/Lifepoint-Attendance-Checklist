@@ -7707,7 +7707,7 @@ app.controller('ChecklistController', function($scope, FluroContent, $filter, No
     // console.log('event', event);
 
     $scope.event = event;
-
+    $scope.availableNotes = false;
 
     if ($localStorage['checklistSearch']) {
         $scope.search = $localStorage['checklistSearch'];
@@ -7746,6 +7746,15 @@ app.controller('ChecklistController', function($scope, FluroContent, $filter, No
             $scope.deselect(item);
         } else {
             $scope.select(item)
+        }
+    }
+
+    $scope.toggleNotes = function(item) {
+        if (item.shownotes) {
+            item.shownotes = false;
+        } else {
+            $scope.availableNotes = true;
+            item.shownotes = true;
         }
     }
 
@@ -7798,10 +7807,44 @@ app.controller('ChecklistController', function($scope, FluroContent, $filter, No
 
 
     /////////////////////////////////////////
+    function submitNotes(){
+      NotificationService.message('Submitting notes', 'info')
 
+      _.forEach(contacts, function(contact){
+        if (contact.eventNote){
+          var post = {
+             parent: contact._id,
+             data: {
+               body: contact.eventNote
+             },
+             _type: "post",
+             definition: "note",
+             realms: contact.realms,
+             title: "Event Note from " + $scope.event.title
+          }
+          console.log("post", post )
+          var promise = FluroContent.endpoint('content/note').save(post).$promise.then(function(res){
+            $analytics.eventTrack('Pastoral note success', {
+                category: 'Contact',
+                label: contact.firstName + ' ' + contact.lastName, // Contact name
+                value: 1 // number
+            });
+          }, function(err){
+            $analytics.eventTrack('Pastoral note failed', {
+                category: 'Contact',
+                label: 'Pastoral Note submit fail',
+                value: 1 // number
+            });
+            console.log(err)
+
+          });
+
+        }
+      })
+    }
 
     $scope.submitReport = function() {
-
+        submitNotes()
         var eventId = $scope.event._id;
         var items = $scope.report.items;
         var successCount = 0;

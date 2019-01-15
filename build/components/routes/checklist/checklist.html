@@ -106,12 +106,21 @@
             </div>
             <div ng-repeat="item in pager.items">
                 <div class="row individual" ng-class="{'active': selected(item)}">
-                    <div class="col-xs-9 col-sm-8">
+                    <div class="col-xs-10 col-sm-8">
                         <h5 class="text-capitalize"><strong>{{item.lastName}},</strong>&nbsp;{{item.firstName}}</h5>
                     </div>
-                    <div class="col-xs-3 col-sm-offset-2 col-sm-2 text-right" ng-click="toggle(item)">
+                    <div class="col-xs-1 col-sm-offset-2 col-sm-1 text-right" ng-click="toggle(item)">
                         <i class="fa fa-2x fa-fw" ng-class="{'fa-check-circle':selected(item),  'fa-circle-o':!selected(item) && !isCheckedIn(item), 'fa-check text-muted':isCheckedIn(item)}"></i>
                     </div>
+                    <div class="col-xs-1 col-sm-1 text-right" ng-click="toggleNotes(item)">
+                      <i class="text-muted fa fa-2x fa-fw fa-pencil-square-o"></i>
+                    </div>
+
+                <!-- </div>
+                <div class="row" ng-show="item.shownotes" > -->
+                  <div class="col-xs-12 col-sm-12" ng-show="item.shownotes">
+                    <label >Add Note:</label>&nbsp;<input type="text" ng-model="item.eventNote" style="display:table-cell; width:100%">
+                  </div>
                 </div>
             </div>
             <div class="text-center" ng-if="pager.total > pager.itemsPerPage">
@@ -125,7 +134,7 @@
 
 <!--Submit Button-->
 <div class="footer-spacer" ng-if="report.items.length > 0"></div>
-<div class="footer" ng-if="report.items.length">
+<div class="footer" ng-if="report.items.length || availableNotes">
     <div class="container">
         <div class="text-wrap">
             <a class="btn btn-primary btn-block" ng-click="submitReport()">
