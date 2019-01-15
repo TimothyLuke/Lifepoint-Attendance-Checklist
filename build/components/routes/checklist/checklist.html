@@ -7,7 +7,7 @@
                     <h6 class="text-muted">
                         {{event.startDate | formatDate:'g:ia j M Y'}}
                         <em>({{event.startDate | timeago}})</em>
-                    </h6>                            
+                    </h6>
                 </div>
                 <div class="col-xs-3 text-right">
                     <a class="btn btn-primary btn-sm" ui-sref="new({returnTo:event._id, realm:event.realms[0]._id})">
@@ -81,7 +81,7 @@
                     <div class="col-xs-6 col-sm-4">
                         <div class="filter-block">
                             <h6>Status</h6>
-                            <select ng-model="search.status" class="form-control">
+                            <select ng-model="search.contactstatus" class="form-control">
                                 <option value="">Any</option>
                                 <option value="{{option}}" ng-repeat="option in status">{{option}}</option>
                             </select>
@@ -91,7 +91,7 @@
             </div>
         </div>
     </div>
-</div>    
+</div>
 
 
 <!--Contact list-->

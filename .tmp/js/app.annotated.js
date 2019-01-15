@@ -12,7 +12,7 @@ function getFlattenedFields(array) {
 
 var app = angular.module("fluro", [ "ngAnimate", "ngResource", "ui.router", "ngTouch", "fluro.config", "fluro.access", "fluro.validate", "fluro.interactions", "fluro.content", "fluro.asset", "fluro.socket", "fluro.video", "angular.filter", "angulartics", "angulartics.google.analytics", "formly", "formlyBootstrap", "ui.bootstrap" ]);
 
-app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProvider, $locationProvider, $analyticsProvider) {
+app.config(['$stateProvider', '$httpProvider', 'FluroProvider', '$urlRouterProvider', '$locationProvider', '$analyticsProvider', function($stateProvider, $httpProvider, FluroProvider, $urlRouterProvider, $locationProvider, $analyticsProvider) {
     var access_token = getMetaKey("fluro_application_key");
     $analyticsProvider.settings.ga.additionalAccountNames = [ "fluro" ], $analyticsProvider.settings.ga.additionalAccountHitTypes.setUserProperties = !0, 
     $analyticsProvider.settings.ga.additionalAccountHitTypes.userTiming = !0;
@@ -27,7 +27,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
         templateUrl: "routes/events/events.html",
         controller: "EventsController",
         resolve: {
-            events: function($stateParams, FluroContentRetrieval) {
+            events: ['$stateParams', 'FluroContentRetrieval', function($stateParams, FluroContentRetrieval) {
                 var tonight = new Date();
                 tonight.setHours(23, 59, 0, 0);
                 var queryDetails = {
@@ -37,31 +37,31 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
                     }
                 };
                 return FluroContentRetrieval.query(queryDetails, null, null, {}, null);
-            }
+            }]
         }
     }), $stateProvider.state("checklist", {
         url: "/event/:id",
         templateUrl: "routes/checklist/checklist.html",
         controller: "ChecklistController",
         resolve: {
-            event: function($stateParams, FluroContent) {
+            event: ['$stateParams', 'FluroContent', function($stateParams, FluroContent) {
                 return console.log("got specified id", $stateParams.id), FluroContent.resource("event/" + $stateParams.id).get({
                     allDefinitions: !0
                 }).$promise;
-            },
-            contacts: function(FluroContent) {
+            }],
+            contacts: ['FluroContent', function(FluroContent) {
                 return FluroContent.resource("contact", !1, !0).query({
                     noCache: !0,
                     appendTeams: "all"
                 }).$promise;
-            }
+            }]
         }
     }), $stateProvider.state("new", {
         url: "/new?returnTo&realm",
         templateUrl: "routes/new/new.html",
         controller: "CreateContactController"
     }), $urlRouterProvider.otherwise("/");
-}), app.run(function($rootScope, $sessionStorage, Asset, NotificationService, FluroContent, FluroBreadcrumbService, FluroScrollService, $location, $timeout, $state, $analytics) {
+}]), app.run(['$rootScope', '$sessionStorage', 'Asset', 'NotificationService', 'FluroContent', 'FluroBreadcrumbService', 'FluroScrollService', '$location', '$timeout', '$state', '$analytics', function($rootScope, $sessionStorage, Asset, NotificationService, FluroContent, FluroBreadcrumbService, FluroScrollService, $location, $timeout, $state, $analytics) {
     $rootScope.staging = !0, $rootScope.asset = Asset, $rootScope.$state = $state, $rootScope.session = $sessionStorage, 
     $rootScope.breadcrumb = FluroBreadcrumbService, $rootScope.notificationService = NotificationService, 
     FluroContent.endpoint("session").get().$promise.then(function(res) {
@@ -83,7 +83,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
     }), $rootScope.getTypeOrDefinition = function(item, defaultIfNoneProvided) {
         return item.definition && item.definition.length ? item.definition : !item._type && defaultIfNoneProvided ? defaultIfNoneProvided : item._type;
     }, FastClick.attach(document.body);
-}), app.directive("accordion", function() {
+}]), app.directive("accordion", function() {
     return {
         restrict: "E",
         replace: !0,
@@ -99,7 +99,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             scope.settings = {};
         }
     };
-}), app.directive("dateselect", function($document) {
+}), app.directive("dateselect", ['$document', function($document) {
     return {
         restrict: "E",
         replace: !0,
@@ -128,7 +128,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
                 $document.off("click", documentClick));
             });
         },
-        controller: function($scope, $timeout) {
+        controller: ['$scope', '$timeout', function($scope, $timeout) {
             function updateLabel() {
                 if ($scope.boundModel) {
                     var date = new Date($scope.boundModel);
@@ -151,9 +151,9 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
                 $scope.boundModel = null;
             }, $scope.rounding && _.isDate($scope.boundModel) && ($scope.boundModel = new Date(Math.round($scope.boundModel.getTime() / coeff) * coeff)), 
             $scope.$watch("boundModel", boundModelChanged, !0), $scope.$watch("settings.dateModel", dateModelChanged, !0);
-        }
+        }]
     };
-}), function() {
+}]), function() {
     Date.shortMonths = [ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" ], 
     Date.longMonths = [ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" ], 
     Date.shortDays = [ "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" ], Date.longDays = [ "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" ];
@@ -475,7 +475,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
         return FastClick;
     }) : "undefined" != typeof module && module.exports ? (module.exports = FastClick.attach, 
     module.exports.FastClick = FastClick) : window.FastClick = FastClick;
-}(), app.directive("extendedFieldRender", function($compile, $templateCache) {
+}(), app.directive("extendedFieldRender", ['$compile', '$templateCache', function($compile, $templateCache) {
     return {
         restrict: "E",
         replace: !0,
@@ -501,7 +501,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             } else $scope.showField = !1, $element.empty();
         }
     };
-}), app.directive("extendedFields", function($compile) {
+}]), app.directive("extendedFields", ['$compile', function($compile) {
     return {
         restrict: "A",
         link: function($scope, $element, $attrs) {
@@ -510,7 +510,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             $element.append(cTemplate);
         }
     };
-}), app.directive("viewExtendedFields", function($compile) {
+}]), app.directive("viewExtendedFields", ['$compile', function($compile) {
     return {
         restrict: "A",
         scope: {
@@ -526,7 +526,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             }
         }
     };
-}), app.directive("extendedFields", function($compile) {
+}]), app.directive("extendedFields", ['$compile', function($compile) {
     return {
         restrict: "A",
         link: function($scope, $element, $attrs) {
@@ -535,7 +535,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             $element.append(cTemplate);
         }
     };
-}), app.directive("fieldViewRender", function($compile) {
+}]), app.directive("fieldViewRender", ['$compile', function($compile) {
     return {
         restrict: "E",
         replace: !0,
@@ -544,15 +544,15 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             model: "=ngModel"
         },
         templateUrl: "views/ui/field-view-render.html",
-        controller: function($scope, ModalService) {
+        controller: ['$scope', 'ModalService', function($scope, ModalService) {
             $scope.viewInModal = function(item) {
                 console.log("View in modal", item), ModalService.view(item);
             }, $scope.editInModal = function(item) {
                 console.log("Edit in modal", item), ModalService.edit(item);
             }, _.isArray($scope.model) && ($scope.multiple = !0), 1 == $scope.field.minimum && 1 == $scope.field.maximum ? $scope.viewModel = [ $scope.model ] : $scope.viewModel = $scope.model;
-        }
+        }]
     };
-}), app.directive("fieldObjectRender", function() {
+}]), app.directive("fieldObjectRender", function() {
     return {
         restrict: "E",
         replace: !0,
@@ -566,7 +566,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
         },
         template: '<div><pre>{{model | json}}</pre><a class="btn btn-default" ng-click="create()" ng-if="!model"><span>Add</span><i class="fa fa-plus"></i></a><div ng-if="model"><json-editor config="model"/></div></div>'
     };
-}), app.directive("fieldEditRender", function($compile) {
+}), app.directive("fieldEditRender", ['$compile', function($compile) {
     return {
         restrict: "E",
         replace: !0,
@@ -647,7 +647,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             }
         }
     };
-}), app.service("FluroBreadcrumbService", function($rootScope, $state, $timeout) {
+}]), app.service("FluroBreadcrumbService", ['$rootScope', '$state', '$timeout', function($rootScope, $state, $timeout) {
     var backButtonPress, controller = {
         trail: []
     }, scrollPositions = {};
@@ -679,7 +679,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             previousState ? $state.go(previousState.name, previousState.params) : $state.$current.parent && $state.$current.parent.self.name.length ? $state.go("^") : $state.go(controller.topState);
         }
     }, controller;
-}), app.controller("FluroInteractionButtonSelectController", function($scope, FluroValidate) {
+}]), app.controller("FluroInteractionButtonSelectController", ['$scope', 'FluroValidate', function($scope, FluroValidate) {
     function checkValidity() {
         var validRequired, validInput = FluroValidate.validate($scope.model[$scope.options.key], definition);
         $scope.multiple ? $scope.to.required && (validRequired = _.isArray($scope.model[opts.key]) && $scope.model[opts.key].length > 0) : $scope.to.required && $scope.model[opts.key] && (validRequired = !0), 
@@ -728,20 +728,20 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
     }), $scope.to.required) var unwatchFormControl = $scope.$watch("fc", function(newValue) {
         newValue && (checkValidity(), unwatchFormControl());
     });
-}), app.run(function(formlyConfig, $templateCache) {
+}]), app.run(['formlyConfig', '$templateCache', function(formlyConfig, $templateCache) {
     formlyConfig.setType({
         name: "dob-select",
         templateUrl: "fluro-interaction-form/dob-select/fluro-dob-select.html",
         wrapper: [ "bootstrapHasError" ]
     });
-}), app.run(function(formlyConfig, $templateCache) {
+}]), app.run(['formlyConfig', '$templateCache', function(formlyConfig, $templateCache) {
     formlyConfig.setType({
         name: "embedded",
         templateUrl: "fluro-interaction-form/embedded/fluro-embedded.html",
         controller: "FluroInteractionNestedController",
         wrapper: [ "bootstrapHasError" ]
     });
-}), app.directive("interactionForm", function($compile) {
+}]), app.directive("interactionForm", ['$compile', function($compile) {
     return {
         restrict: "E",
         scope: {
@@ -759,7 +759,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             });
         }
     };
-}), app.directive("webform", function($compile) {
+}]), app.directive("webform", ['$compile', function($compile) {
     return {
         restrict: "E",
         scope: {
@@ -779,7 +779,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             });
         }
     };
-}), app.config(function(formlyConfigProvider) {
+}]), app.config(['formlyConfigProvider', function(formlyConfigProvider) {
     formlyConfigProvider.setType({
         name: "currency",
         "extends": "input",
@@ -820,7 +820,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             }
         }
     });
-}), app.run(function(formlyConfig, $templateCache) {
+}]), app.run(['formlyConfig', '$templateCache', function(formlyConfig, $templateCache) {
     formlyConfig.templateManipulators.postWrapper.push(function(template, options, scope) {
         var fluroErrorTemplate = $templateCache.get("fluro-interaction-form/field-errors.html");
         return "<div>" + template + fluroErrorTemplate + "</div>";
@@ -872,11 +872,11 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
         controller: "FluroInteractionButtonSelectController",
         wrapper: [ "bootstrapLabel", "bootstrapHasError" ]
     });
-}), app.controller("CustomInteractionFieldController", function($scope, FluroValidate) {
+}]), app.controller("CustomInteractionFieldController", ['$scope', 'FluroValidate', function($scope, FluroValidate) {
     $scope.$watch("model[options.key]", function(value) {
         value && $scope.fc && $scope.fc.$setTouched();
     }, !0);
-}), app.controller("FluroDateSelectController", function($scope) {
+}]), app.controller("FluroDateSelectController", ['$scope', function($scope) {
     $scope.today = function() {
         $scope.model[$scope.options.key] = new Date();
     }, $scope.open = function($event) {
@@ -885,7 +885,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
         formatYear: "yy",
         startingDay: 1
     }, $scope.formats = [ "dd/MM/yyyy" ], $scope.format = $scope.formats[0];
-}), app.controller("InteractionFormController", function($scope, $q, $rootScope, FluroAccess, $parse, $filter, formlyValidationMessages, FluroContent, FluroContentRetrieval, FluroValidate, FluroInteraction) {
+}]), app.controller("InteractionFormController", ['$scope', '$q', '$rootScope', 'FluroAccess', '$parse', '$filter', 'formlyValidationMessages', 'FluroContent', 'FluroContentRetrieval', 'FluroValidate', 'FluroInteraction', function($scope, $q, $rootScope, FluroAccess, $parse, $filter, formlyValidationMessages, FluroContent, FluroContentRetrieval, FluroValidate, FluroInteraction) {
     function getAllErrorFields(array) {
         return _.chain(array).map(function(field) {
             if (field.fieldGroup && field.fieldGroup.length) return getAllErrorFields(field.fieldGroup);
@@ -1519,7 +1519,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
     }), $scope.$watch("vm.modelFields", function(fields) {
         $scope.errorList = getAllErrorFields(fields);
     }, !0);
-}), app.directive("postForm", function($compile) {
+}]), app.directive("postForm", ['$compile', function($compile) {
     return {
         restrict: "E",
         scope: {
@@ -1541,7 +1541,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             });
         }
     };
-}), app.directive("recaptchaRender", function($window) {
+}]), app.directive("recaptchaRender", ['$window', function($window) {
     return {
         restrict: "A",
         link: function($scope, $element, $attrs, $ctrl) {
@@ -1558,7 +1558,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             }
         }
     };
-}), app.controller("PostFormController", function($scope, $rootScope, $q, $http, Fluro, FluroAccess, $parse, $filter, formlyValidationMessages, FluroContent, FluroContentRetrieval, FluroValidate, FluroInteraction) {
+}]), app.controller("PostFormController", ['$scope', '$rootScope', '$q', '$http', 'Fluro', 'FluroAccess', '$parse', '$filter', 'formlyValidationMessages', 'FluroContent', 'FluroContentRetrieval', 'FluroValidate', 'FluroInteraction', function($scope, $rootScope, $q, $http, Fluro, FluroAccess, $parse, $filter, formlyValidationMessages, FluroContent, FluroContentRetrieval, FluroValidate, FluroInteraction) {
     function resetCaptcha() {
         var recaptchaID = $scope.vm.recaptchaID;
         console.log("Reset Captcha", recaptchaID), window.grecaptcha && recaptchaID && window.grecaptcha.reset(recaptchaID);
@@ -1833,7 +1833,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
     }), $scope.$watch("vm.modelFields", function(fields) {
         $scope.errorList = getAllErrorFields(fields);
     }, !0);
-}), app.directive("postThread", function(FluroContent) {
+}]), app.directive("postThread", ['FluroContent', function(FluroContent) {
     return {
         restrict: "E",
         transclude: !0,
@@ -1847,7 +1847,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
                 $element.replaceWith(clone);
             });
         },
-        controller: function($scope, $filter) {
+        controller: ['$scope', '$filter', function($scope, $filter) {
             $scope.outer = $scope.$parent, $scope.thread || ($scope.thread = []), $scope.$watch("host + definitionName", function() {
                 function postsLoaded(res) {
                     var allPosts = res;
@@ -1866,15 +1866,15 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
                     request.then(postsLoaded, postsError);
                 }
             });
-        }
+        }]
     };
-}), app.run(function(formlyConfig, $templateCache) {
+}]), app.run(['formlyConfig', '$templateCache', function(formlyConfig, $templateCache) {
     formlyConfig.setType({
         name: "nested",
         templateUrl: "fluro-interaction-form/nested/fluro-nested.html",
         controller: "FluroInteractionNestedController"
     });
-}), app.controller("FluroInteractionNestedController", function($scope) {
+}]), app.controller("FluroInteractionNestedController", ['$scope', function($scope) {
     function resetDefaultValue() {
         var defaultValue = angular.copy($scope.to.baseDefaultValue);
         $scope.model || console.log("NO RESET Reset Model Values", $scope.options.key, defaultValue), 
@@ -1896,14 +1896,14 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
         var copiedFields = angular.copy($scope.options.data.dataFields);
         return $scope.options.data.replicatedFields.push(copiedFields), copiedFields;
     };
-}), app.run(function(formlyConfig, $templateCache) {
+}]), app.run(['formlyConfig', '$templateCache', function(formlyConfig, $templateCache) {
     formlyConfig.setType({
         name: "search-select",
         templateUrl: "fluro-interaction-form/search-select/fluro-search-select.html",
         controller: "FluroSearchSelectController",
         wrapper: [ "bootstrapLabel", "bootstrapHasError" ]
     });
-}), app.controller("FluroSearchSelectController", function($scope, $http, Fluro, $filter, FluroValidate) {
+}]), app.controller("FluroSearchSelectController", ['$scope', '$http', 'Fluro', '$filter', 'FluroValidate', function($scope, $http, Fluro, $filter, FluroValidate) {
     function setModel() {
         $scope.multiple ? $scope.model[opts.key] = angular.copy($scope.selection.values) : $scope.model[opts.key] = angular.copy($scope.selection.value), 
         $scope.fc && $scope.fc.$setTouched(), checkValidity();
@@ -1999,13 +1999,13 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
     }, $scope.toggle = function(reference) {
         $scope.contains(reference) ? $scope.deselect(reference) : $scope.select(reference);
     };
-}), app.run(function(formlyConfig, $templateCache) {
+}]), app.run(['formlyConfig', '$templateCache', function(formlyConfig, $templateCache) {
     formlyConfig.setType({
         name: "value",
         templateUrl: "fluro-interaction-form/value/value.html",
         wrapper: [ "bootstrapHasError" ]
     });
-}), app.service("NotificationService", function($timeout) {
+}]), app.service("NotificationService", ['$timeout', function($timeout) {
     var controller = {
         messages: []
     };
@@ -2022,7 +2022,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             _.pull(controller.messages, message);
         }, message.duration);
     }, controller;
-}), app.directive("preloadImage", function() {
+}]), app.directive("preloadImage", function() {
     return {
         restrict: "A",
         link: function(scope, element, attrs) {
@@ -2047,7 +2047,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
         controller: "FluroPreloaderController",
         link: function(scope, element, attrs) {}
     };
-}), app.controller("FluroPreloaderController", function($scope, $state, $rootScope, $timeout) {
+}), app.controller("FluroPreloaderController", ['$scope', '$state', '$rootScope', '$timeout', function($scope, $state, $rootScope, $timeout) {
     function hidePreloader(event, toState, toParams, fromState, fromParams, error) {
         preloadTimer && ($timeout.cancel(preloadTimer), preloadTimer = null), "loading" == $scope.preloader["class"] && $timeout(function() {
             $scope.preloader["class"] = "loaded";
@@ -2063,7 +2063,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
     }), $rootScope.$on("$stateChangeError", function(event, toState, toParams, fromState, fromParams, error) {
         preloadTimer && ($timeout.cancel(preloadTimer), preloadTimer = null), $scope.preloader["class"] = "reset";
     }), $rootScope.$on("$preloaderHide", hidePreloader), $rootScope.$on("$stateChangeSuccess", hidePreloader);
-}), app.directive("scrollActive", function($compile, $timeout, $window, FluroScrollService) {
+}]), app.directive("scrollActive", ['$compile', '$timeout', '$window', 'FluroScrollService', function($compile, $timeout, $window, FluroScrollService) {
     return {
         restrict: "A",
         link: function($scope, $element, $attrs) {
@@ -2124,7 +2124,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             }, updateFromMainScroll), $timeout(updateFromMainScroll, 10));
         }
     };
-}), app.service("FluroScrollService", function($window, $location, $timeout) {
+}]), app.service("FluroScrollService", ['$window', '$location', '$timeout', function($window, $location, $timeout) {
     function updateScroll() {
         var v = this.pageYOffset;
         _value != this.pageYOffset && (_value > v ? controller.direction = "up" : controller.direction = "down", 
@@ -2167,7 +2167,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
     }, controller.getWindowHeight = function() {
         return $window.innerHeight;
     }, angular.element($window).bind("scroll", updateScroll), updateScroll(), controller;
-}), app.service("FluroSEOService", function($rootScope, $location) {
+}]), app.service("FluroSEOService", ['$rootScope', '$location', function($rootScope, $location) {
     var controller = {};
     return $rootScope.$watch(function() {
         return controller.siteTitle + " | " + controller.pageTitle;
@@ -2186,7 +2186,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
     }), $rootScope.$on("$stateChangeStart", function() {
         controller.description = null, controller.imageURL = null, console.log("REset SEO");
     }), controller;
-}), app.controller("UserLoginController", function($scope, $http, FluroTokenService, NotificationService) {
+}]), app.controller("UserLoginController", ['$scope', '$http', 'FluroTokenService', 'NotificationService', function($scope, $http, FluroTokenService, NotificationService) {
     $scope.credentials = {}, $scope.status = "ready", $scope.signup = function(options) {
         $scope.status = "processing";
         var request = FluroTokenService.signup($scope.credentials, options);
@@ -2204,14 +2204,14 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             $scope.status = "ready", console.log("FAILED", res), NotificationService.message(String(res.data), "danger");
         });
     };
-}), app.directive("hamburger", function() {
+}]), app.directive("hamburger", function() {
     return {
         restrict: "E",
         replace: !0,
         template: '<div class="hamburger"> 		  <span></span> 		  <span></span> 		  <span></span> 		  <span></span> 		</div>',
         link: function($scope, $elem, $attr) {}
     };
-}), app.directive("compileHtml", function($compile) {
+}), app.directive("compileHtml", ['$compile', function($compile) {
     return {
         restrict: "A",
         link: function(scope, element, attrs) {
@@ -2222,7 +2222,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             });
         }
     };
-}), app.directive("infinitePager", function($timeout, $sessionStorage) {
+}]), app.directive("infinitePager", ['$timeout', '$sessionStorage', function($timeout, $sessionStorage) {
     return {
         restrict: "A",
         link: function($scope, $element, $attr) {
@@ -2247,7 +2247,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             };
         }
     };
-}), app.filter("capitalise", function() {
+}]), app.filter("capitalise", function() {
     return function(str) {
         return _.upperCase(str);
     };
@@ -2286,7 +2286,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
     return function(date) {
         return moment(date).fromNow();
     };
-}), app.controller("ChecklistController", function($scope, FluroContent, $filter, NotificationService, $localStorage, event, contacts, $analytics) {
+}), app.controller("ChecklistController", ['$scope', 'FluroContent', '$filter', 'NotificationService', '$localStorage', 'event', 'contacts', '$analytics', function($scope, FluroContent, $filter, NotificationService, $localStorage, event, contacts, $analytics) {
     function updateSearchOptions() {
         var filteredContacts = contacts;
         $scope.search.terms && $scope.search.terms.length && (filteredContacts = $filter("filter")(filteredContacts, $scope.search.terms)), 
@@ -2416,9 +2416,9 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
         $scope.pager.pages = Math.ceil($scope.filteredContacts.length / $scope.pager.itemsPerPage), 
         $scope.pager.items = $scope.filteredContacts.slice(start, end);
     });
-}), app.controller("ViewContentController", function($scope, item, definition) {
+}]), app.controller("ViewContentController", ['$scope', 'item', 'definition', function($scope, item, definition) {
     $scope.definition = definition, $scope.item = item;
-}), app.controller("EventsController", function($scope, events, $localStorage, $filter) {
+}]), app.controller("EventsController", ['$scope', 'events', '$localStorage', '$filter', function($scope, events, $localStorage, $filter) {
     function updateFilters() {
         var filteredItems = events;
         $scope.search.terms && $scope.search.terms.length && (filteredItems = $filter("filter")(filteredItems, $scope.search.terms)), 
@@ -2488,7 +2488,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
             $log.info("modal-component dismissed at: " + new Date());
         });
     };
-}), app.controller("CreateContactController", function($scope, $stateParams, FluroContent, $analytics) {
+}]), app.controller("CreateContactController", ['$scope', '$stateParams', 'FluroContent', '$analytics', function($scope, $stateParams, FluroContent, $analytics) {
     function newContact() {
         return {
             emails: [],
@@ -2512,7 +2512,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
         $scope.settings.state = "processing";
         FluroContent.resource("contact").save($scope.contact).$promise.then(success, fail);
     };
-}), app.service("NotificationService", function($timeout) {
+}]), app.service("NotificationService", ['$timeout', function($timeout) {
     var controller = {
         messages: []
     };
@@ -2532,7 +2532,7 @@ app.config(function($stateProvider, $httpProvider, FluroProvider, $urlRouterProv
     }, controller.dismiss = function() {
         controller.messages = [];
     }, controller;
-}), angular.module("fluro").run([ "$templateCache", function($templateCache) {
+}]), angular.module("fluro").run([ "$templateCache", function($templateCache) {
     "use strict";
     $templateCache.put("accordion/accordion.html", '<div class=accordion ng-class={expanded:settings.expanded}><div class=accordion-title ng-click="settings.expanded = !settings.expanded"><div class=container-fluid><div class=text-wrap><h3 class=title><i class="fa fa-angle-right pull-right" ng-class="{\'fa-rotate-90\':settings.expanded}"></i> <span ng-transclude=title></span></h3></div></div></div><div class=accordion-body><div ng-class="{\'container\':wide, \'container-fluid\':!wide}"><div ng-class="{\'text-wrap\':!wide}" ng-transclude=body></div></div></div></div>'), 
     $templateCache.put("admin-date-select/admin-date-select.html", '<div class=dateselect ng-class={open:settings.open}><div class=btn-group><a class="btn btn-default" ng-class={active:settings.open} ng-click="settings.open = !settings.open"><i class="fa fa-calendar"></i> <span ng-bind-html="readable | trusted"></span></a></div><dpiv class=popup><div class=datetime><div uib-datepicker class=datepicker datepicker-options=datePickerOptions ng-model=settings.dateModel></div></div></dpiv></div>'), 
