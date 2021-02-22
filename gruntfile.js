@@ -262,7 +262,7 @@ module.exports = function(grunt) {
     //grunt.registerTask('default', ['connect', 'open:dev', 'watch']);
     grunt.registerTask('default', ['connect', 'watch']);
     //grunt.registerTask('build', ['copy:build', 'htmlmin:build', 'uglify:build', 'cssmin:build']);
-    grunt.registerTask('build', ['useminPrepare', 'concat:generated', 'copy', 'cssmin', 'htmlmin:generated', 'uglify:generated', 'usemin', 'ngAnnotate', 'concat:dist', 'uglify:dist', 'fluro', 'htmlmin:dist']);
+    grunt.registerTask('build', ['useminPrepare', 'concat:generated', 'copy', 'cssmin', 'htmlmin:generated', 'usemin', 'ngAnnotate', 'concat:dist', 'uglify:dist', 'fluro', 'htmlmin:dist']);
 
     //'autoprefixer', 'cssmin'
 

@@ -280,7 +280,27 @@ app.controller('ChecklistController', function($scope, FluroContent, $filter, No
                 return _.some(contact.teams, {_id:selectedGroupID})
             });
         }
+        if ($scope.search.campuses) {
+            filteredContacts = _.filter(filteredContacts, function(contact) {
 
+                var selectedRealmID = $scope.search.campuses;
+                return _.some(contact.realms, {_id:selectedRealmID})
+            });
+        }
+        if ($scope.search.departments) {
+            filteredContacts = _.filter(filteredContacts, function(contact) {
+
+                var selectedRealmID = $scope.search.departments;
+                return _.some(contact.realms, {_id:selectedRealmID})
+            });
+        }
+        if ($scope.search.otherRealms) {
+            filteredContacts = _.filter(filteredContacts, function(contact) {
+
+                var selectedRealmID = $scope.search.otherRealms;
+                return _.some(contact.realms, {_id:selectedRealmID})
+            });
+        }
 
 
         //////////////////////////////////////////
@@ -342,6 +362,7 @@ app.controller('ChecklistController', function($scope, FluroContent, $filter, No
         })
         .value();
 
+
         // console.log('realms are', $scope.realms)
 
         // /////////////////////////////
@@ -387,8 +408,23 @@ app.controller('ChecklistController', function($scope, FluroContent, $filter, No
         .value();
 
 
-        console.log('groups', $scope.groups)
+        // console.log('groups', $scope.groups)
+        // console.log('realms', $scope.realms)
         // console.log('Updated filteredContacts')
+
+        $scope.campuses = _.filter($scope.realms, function(realm) {
+            return realm.definition == "campus"
+        })
+        
+        $scope.departments = _.filter($scope.realms, function(realm) {
+            return realm.definition == "department"
+        })
+
+        $scope.otherRealms = _.filter($scope.realms, function(realm) {
+            return !realm.definition
+        })
+
+        // console.log('campuses', $scope.campuses)
 
         //Update the items with our search
         $scope.filteredContacts = _.orderBy(filteredContacts, function(contact) {

@@ -62,10 +62,28 @@
                     </div>
                     <div class="col-xs-6 col-sm-4">
                         <div class="filter-block">
-                            <h6>Realms</h6>
-                            <select ng-model="search.realms" class="form-control">
+                            <h6>Campuses</h6>
+                            <select ng-model="search.campuses" class="form-control">
                                 <option value="">Any</option>
-                                <option value="{{option._id}}" ng-repeat="option in realms | orderBy:'title'">{{option.title}}</option>
+                                <option value="{{option._id}}" ng-repeat="option in campuses | orderBy:'title'">{{option.title}}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-xs-6 col-sm-4">
+                        <div class="filter-block">
+                            <h6>Departments</h6>
+                            <select ng-model="search.departments" class="form-control">
+                                <option value="">Any</option>
+                                <option value="{{option._id}}" ng-repeat="option in departments | orderBy:'title'">{{option.title}}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-xs-6 col-sm-4">
+                        <div class="filter-block">
+                            <h6>Other Realms</h6>
+                            <select ng-model="search.otherRealms" class="form-control">
+                                <option value="">Any</option>
+                                <option value="{{option._id}}" ng-repeat="option in otherRealms | orderBy:'title'">{{option.title}}</option>
                             </select>
                         </div>
                     </div>
