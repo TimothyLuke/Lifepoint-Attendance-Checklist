@@ -8,7 +8,7 @@
     "angular-animate": "^1.5.8",
     "angular-resource": "^1.3.0",
     "angular-touch": "^1.3.0",
-    "angular-ui-router": "^0.3.1",
+    "angular-ui-router": "<1.0",
     "fluro.config": "*",
     "fluro.content": "*",
     "font-awesome": "~4.2.0",
@@ -27,9 +27,18 @@
     "fluro-interactions": "fluro.interactions#*",
     "fluro.util": "*",
     "async": "^2.1.4",
-    "angulartics-google-analytics": "^0.4.0"
+    "angulartics-google-analytics": "^0.4.0",
+    "SHA-1": "0.1.1"
   },
   "resolutions": {
-    "angular": "^1.5.8"
+    "angular": "^1.8.2",
+    "angular-bootstrap": "1.3.3",
+    "font-awesome": "^4.7.0",
+    "angulartics": "~1.0.0",
+    "moment": "^2.18.1",
+    "lodash": "3.10.1",
+    "validator-js": "^5.7.0",
+    "angular-formly": "^8.4.1",
+    "ace-builds": "^1.2.7"
   }
 }
