@@ -6,10 +6,11 @@
     } : factory(global);
 }("undefined" != typeof window ? window : this, function(window, noGlobal) {
     "use strict";
-    function DOMEval(code, doc, node) {
+    function DOMEval(code, node, doc) {
         doc = doc || document;
-        var i, script = doc.createElement("script");
-        if (script.text = code, node) for (i in preservedScriptAttributes) node[i] && (script[i] = node[i]);
+        var i, val, script = doc.createElement("script");
+        if (script.text = code, node) for (i in preservedScriptAttributes) val = node[i] || node.getAttribute && node.getAttribute(i), 
+        val && script.setAttribute(i, val);
         doc.head.appendChild(script).parentNode.removeChild(script);
     }
     function toType(obj) {
@@ -59,7 +60,7 @@
         document.removeEventListener("DOMContentLoaded", completed), window.removeEventListener("load", completed), 
         jQuery.ready();
     }
-    function fcamelCase(all, letter) {
+    function fcamelCase(_all, letter) {
         return letter.toUpperCase();
     }
     function camelCase(string) {
@@ -87,7 +88,7 @@
             return tween.cur();
         } : function() {
             return jQuery.css(elem, prop, "");
-        }, initial = currentValue(), unit = valueParts && valueParts[3] || (jQuery.cssNumber[prop] ? "" : "px"), initialInUnit = (jQuery.cssNumber[prop] || "px" !== unit && +initial) && rcssNum.exec(jQuery.css(elem, prop));
+        }, initial = currentValue(), unit = valueParts && valueParts[3] || (jQuery.cssNumber[prop] ? "" : "px"), initialInUnit = elem.nodeType && (jQuery.cssNumber[prop] || "px" !== unit && +initial) && rcssNum.exec(jQuery.css(elem, prop));
         if (initialInUnit && initialInUnit[3] !== unit) {
             for (initial /= 2, unit = unit || initialInUnit[3], initialInUnit = +initial || 1; maxIterations--; ) jQuery.style(elem, prop, initialInUnit + unit), 
             (1 - scale) * (1 - (scale = currentValue() / initial || .5)) <= 0 && (maxIterations = 0), 
@@ -122,15 +123,15 @@
         for (var i = 0, l = elems.length; l > i; i++) dataPriv.set(elems[i], "globalEval", !refElements || dataPriv.get(refElements[i], "globalEval"));
     }
     function buildFragment(elems, context, scripts, selection, ignored) {
-        for (var elem, tmp, tag, wrap, contains, j, fragment = context.createDocumentFragment(), nodes = [], i = 0, l = elems.length; l > i; i++) if (elem = elems[i], 
+        for (var elem, tmp, tag, wrap, attached, j, fragment = context.createDocumentFragment(), nodes = [], i = 0, l = elems.length; l > i; i++) if (elem = elems[i], 
         elem || 0 === elem) if ("object" === toType(elem)) jQuery.merge(nodes, elem.nodeType ? [ elem ] : elem); else if (rhtml.test(elem)) {
             for (tmp = tmp || fragment.appendChild(context.createElement("div")), tag = (rtagName.exec(elem) || [ "", "" ])[1].toLowerCase(), 
             wrap = wrapMap[tag] || wrapMap._default, tmp.innerHTML = wrap[1] + jQuery.htmlPrefilter(elem) + wrap[2], 
             j = wrap[0]; j--; ) tmp = tmp.lastChild;
             jQuery.merge(nodes, tmp.childNodes), tmp = fragment.firstChild, tmp.textContent = "";
         } else nodes.push(context.createTextNode(elem));
-        for (fragment.textContent = "", i = 0; elem = nodes[i++]; ) if (selection && jQuery.inArray(elem, selection) > -1) ignored && ignored.push(elem); else if (contains = jQuery.contains(elem.ownerDocument, elem), 
-        tmp = getAll(fragment.appendChild(elem), "script"), contains && setGlobalEval(tmp), 
+        for (fragment.textContent = "", i = 0; elem = nodes[i++]; ) if (selection && jQuery.inArray(elem, selection) > -1) ignored && ignored.push(elem); else if (attached = isAttached(elem), 
+        tmp = getAll(fragment.appendChild(elem), "script"), attached && setGlobalEval(tmp), 
         scripts) for (j = 0; elem = tmp[j++]; ) rscriptType.test(elem.type || "") && scripts.push(elem);
         return fragment;
     }
@@ -139,6 +140,9 @@
     }
     function returnFalse() {
         return !1;
+    }
+    function expectSync(elem, type) {
+        return elem === safeActiveElement() == ("focus" === type);
     }
     function safeActiveElement() {
         try {
@@ -160,6 +164,23 @@
             jQuery.event.add(this, types, fn, data, selector);
         });
     }
+    function leverageNative(el, type, expectSync) {
+        return expectSync ? (dataPriv.set(el, type, !1), void jQuery.event.add(el, type, {
+            namespace: !1,
+            handler: function(event) {
+                var notAsync, result, saved = dataPriv.get(this, type);
+                if (1 & event.isTrigger && this[type]) {
+                    if (saved.length) (jQuery.event.special[type] || {}).delegateType && event.stopPropagation(); else if (saved = slice.call(arguments), 
+                    dataPriv.set(this, type, saved), notAsync = expectSync(this, type), this[type](), 
+                    result = dataPriv.get(this, type), saved !== result || notAsync ? dataPriv.set(this, type, !1) : result = {}, 
+                    saved !== result) return event.stopImmediatePropagation(), event.preventDefault(), 
+                    result.value;
+                } else saved.length && (dataPriv.set(this, type, {
+                    value: jQuery.event.trigger(jQuery.extend(saved[0], jQuery.Event.prototype), saved.slice(1), this)
+                }), event.stopImmediatePropagation());
+            }
+        })) : void (void 0 === dataPriv.get(el, type) && jQuery.event.add(el, type, returnTrue));
+    }
     function manipulationTarget(elem, content) {
         return nodeName(elem, "table") && nodeName(11 !== content.nodeType ? content : content.firstChild, "tr") ? jQuery(elem).children("tbody")[0] || elem : elem;
     }
@@ -171,11 +192,10 @@
         elem;
     }
     function cloneCopyEvent(src, dest) {
-        var i, l, type, pdataOld, pdataCur, udataOld, udataCur, events;
+        var i, l, type, pdataOld, udataOld, udataCur, events;
         if (1 === dest.nodeType) {
-            if (dataPriv.hasData(src) && (pdataOld = dataPriv.access(src), pdataCur = dataPriv.set(dest, pdataOld), 
-            events = pdataOld.events)) {
-                delete pdataCur.handle, pdataCur.events = {};
+            if (dataPriv.hasData(src) && (pdataOld = dataPriv.get(src), events = pdataOld.events)) {
+                dataPriv.remove(dest, "handle events");
                 for (type in events) for (i = 0, l = events[type].length; l > i; i++) jQuery.event.add(dest, type, events[type][i]);
             }
             dataUser.hasData(src) && (udataOld = dataUser.access(src), udataCur = jQuery.extend({}, udataOld), 
@@ -187,7 +207,7 @@
         "input" === nodeName && rcheckableType.test(src.type) ? dest.checked = src.checked : ("input" === nodeName || "textarea" === nodeName) && (dest.defaultValue = src.defaultValue);
     }
     function domManip(collection, args, callback, ignored) {
-        args = concat.apply([], args);
+        args = flat(args);
         var fragment, first, scripts, hasScripts, node, doc, i = 0, l = collection.length, iNoClone = l - 1, value = args[0], valueIsFunction = isFunction(value);
         if (valueIsFunction || l > 1 && "string" == typeof value && !support.checkClone && rchecked.test(value)) return collection.each(function(index) {
             var self = collection.eq(index);
@@ -200,21 +220,22 @@
             i !== iNoClone && (node = jQuery.clone(node, !0, !0), hasScripts && jQuery.merge(scripts, getAll(node, "script"))), 
             callback.call(collection[i], node, i);
             if (hasScripts) for (doc = scripts[scripts.length - 1].ownerDocument, jQuery.map(scripts, restoreScript), 
-            i = 0; hasScripts > i; i++) node = scripts[i], rscriptType.test(node.type || "") && !dataPriv.access(node, "globalEval") && jQuery.contains(doc, node) && (node.src && "module" !== (node.type || "").toLowerCase() ? jQuery._evalUrl && jQuery._evalUrl(node.src) : DOMEval(node.textContent.replace(rcleanScript, ""), doc, node));
+            i = 0; hasScripts > i; i++) node = scripts[i], rscriptType.test(node.type || "") && !dataPriv.access(node, "globalEval") && jQuery.contains(doc, node) && (node.src && "module" !== (node.type || "").toLowerCase() ? jQuery._evalUrl && !node.noModule && jQuery._evalUrl(node.src, {
+                nonce: node.nonce || node.getAttribute("nonce")
+            }, doc) : DOMEval(node.textContent.replace(rcleanScript, ""), node, doc));
         }
         return collection;
     }
     function remove(elem, selector, keepData) {
         for (var node, nodes = selector ? jQuery.filter(selector, elem) : elem, i = 0; null != (node = nodes[i]); i++) keepData || 1 !== node.nodeType || jQuery.cleanData(getAll(node)), 
-        node.parentNode && (keepData && jQuery.contains(node.ownerDocument, node) && setGlobalEval(getAll(node, "script")), 
+        node.parentNode && (keepData && isAttached(node) && setGlobalEval(getAll(node, "script")), 
         node.parentNode.removeChild(node));
         return elem;
     }
     function curCSS(elem, name, computed) {
         var width, minWidth, maxWidth, ret, style = elem.style;
         return computed = computed || getStyles(elem), computed && (ret = computed.getPropertyValue(name) || computed[name], 
-        "" !== ret || jQuery.contains(elem.ownerDocument, elem) || (ret = jQuery.style(elem, name)), 
-        !support.pixelBoxStyles() && rnumnonpx.test(ret) && rboxStyle.test(name) && (width = style.width, 
+        "" !== ret || isAttached(elem) || (ret = jQuery.style(elem, name)), !support.pixelBoxStyles() && rnumnonpx.test(ret) && rboxStyle.test(name) && (width = style.width, 
         minWidth = style.minWidth, maxWidth = style.maxWidth, style.minWidth = style.maxWidth = style.width = ret, 
         ret = computed.width, style.width = width, style.minWidth = minWidth, style.maxWidth = maxWidth)), 
         void 0 !== ret ? ret + "" : ret;
@@ -227,15 +248,14 @@
         };
     }
     function vendorPropName(name) {
-        if (name in emptyStyle) return name;
         for (var capName = name[0].toUpperCase() + name.slice(1), i = cssPrefixes.length; i--; ) if (name = cssPrefixes[i] + capName, 
         name in emptyStyle) return name;
     }
     function finalPropName(name) {
-        var ret = jQuery.cssProps[name];
-        return ret || (ret = jQuery.cssProps[name] = vendorPropName(name) || name), ret;
+        var final = jQuery.cssProps[name] || vendorProps[name];
+        return final ? final : name in emptyStyle ? name : vendorProps[name] = vendorPropName(name) || name;
     }
-    function setPositiveNumber(elem, value, subtract) {
+    function setPositiveNumber(_elem, value, subtract) {
         var matches = rcssNum.exec(value);
         return matches ? Math.max(0, matches[2] - (subtract || 0)) + (matches[3] || "px") : value;
     }
@@ -246,18 +266,18 @@
         isBorderBox ? ("content" === box && (delta -= jQuery.css(elem, "padding" + cssExpand[i], !0, styles)), 
         "margin" !== box && (delta -= jQuery.css(elem, "border" + cssExpand[i] + "Width", !0, styles))) : (delta += jQuery.css(elem, "padding" + cssExpand[i], !0, styles), 
         "padding" !== box ? delta += jQuery.css(elem, "border" + cssExpand[i] + "Width", !0, styles) : extra += jQuery.css(elem, "border" + cssExpand[i] + "Width", !0, styles));
-        return !isBorderBox && computedVal >= 0 && (delta += Math.max(0, Math.ceil(elem["offset" + dimension[0].toUpperCase() + dimension.slice(1)] - computedVal - delta - extra - .5))), 
+        return !isBorderBox && computedVal >= 0 && (delta += Math.max(0, Math.ceil(elem["offset" + dimension[0].toUpperCase() + dimension.slice(1)] - computedVal - delta - extra - .5)) || 0), 
         delta;
     }
     function getWidthOrHeight(elem, dimension, extra) {
-        var styles = getStyles(elem), val = curCSS(elem, dimension, styles), isBorderBox = "border-box" === jQuery.css(elem, "boxSizing", !1, styles), valueIsBorderBox = isBorderBox;
+        var styles = getStyles(elem), boxSizingNeeded = !support.boxSizingReliable() || extra, isBorderBox = boxSizingNeeded && "border-box" === jQuery.css(elem, "boxSizing", !1, styles), valueIsBorderBox = isBorderBox, val = curCSS(elem, dimension, styles), offsetProp = "offset" + dimension[0].toUpperCase() + dimension.slice(1);
         if (rnumnonpx.test(val)) {
             if (!extra) return val;
             val = "auto";
         }
-        return valueIsBorderBox = valueIsBorderBox && (support.boxSizingReliable() || val === elem.style[dimension]), 
-        ("auto" === val || !parseFloat(val) && "inline" === jQuery.css(elem, "display", !1, styles)) && (val = elem["offset" + dimension[0].toUpperCase() + dimension.slice(1)], 
-        valueIsBorderBox = !0), val = parseFloat(val) || 0, val + boxModelAdjustment(elem, dimension, extra || (isBorderBox ? "border" : "content"), valueIsBorderBox, styles, val) + "px";
+        return (!support.boxSizingReliable() && isBorderBox || !support.reliableTrDimensions() && nodeName(elem, "tr") || "auto" === val || !parseFloat(val) && "inline" === jQuery.css(elem, "display", !1, styles)) && elem.getClientRects().length && (isBorderBox = "border-box" === jQuery.css(elem, "boxSizing", !1, styles), 
+        valueIsBorderBox = offsetProp in elem, valueIsBorderBox && (val = elem[offsetProp])), 
+        val = parseFloat(val) || 0, val + boxModelAdjustment(elem, dimension, extra || (isBorderBox ? "border" : "content"), valueIsBorderBox, styles, val) + "px";
     }
     function Tween(elem, options, prop, end, easing) {
         return new Tween.prototype.init(elem, options, prop, end, easing);
@@ -458,17 +478,22 @@
             data: response
         };
     }
-    var arr = [], document = window.document, getProto = Object.getPrototypeOf, slice = arr.slice, concat = arr.concat, push = arr.push, indexOf = arr.indexOf, class2type = {}, toString = class2type.toString, hasOwn = class2type.hasOwnProperty, fnToString = hasOwn.toString, ObjectFunctionString = fnToString.call(Object), support = {}, isFunction = function(obj) {
+    var arr = [], getProto = Object.getPrototypeOf, slice = arr.slice, flat = arr.flat ? function(array) {
+        return arr.flat.call(array);
+    } : function(array) {
+        return arr.concat.apply([], array);
+    }, push = arr.push, indexOf = arr.indexOf, class2type = {}, toString = class2type.toString, hasOwn = class2type.hasOwnProperty, fnToString = hasOwn.toString, ObjectFunctionString = fnToString.call(Object), support = {}, isFunction = function(obj) {
         return "function" == typeof obj && "number" != typeof obj.nodeType;
     }, isWindow = function(obj) {
         return null != obj && obj === obj.window;
-    }, preservedScriptAttributes = {
+    }, document = window.document, preservedScriptAttributes = {
         type: !0,
         src: !0,
+        nonce: !0,
         noModule: !0
-    }, version = "3.3.1", jQuery = function(selector, context) {
+    }, version = "3.5.1", jQuery = function(selector, context) {
         return new jQuery.fn.init(selector, context);
-    }, rtrim = /^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g;
+    };
     jQuery.fn = jQuery.prototype = {
         jquery: version,
         constructor: jQuery,
@@ -500,6 +525,16 @@
         last: function() {
             return this.eq(-1);
         },
+        even: function() {
+            return this.pushStack(jQuery.grep(this, function(_elem, i) {
+                return (i + 1) % 2;
+            }));
+        },
+        odd: function() {
+            return this.pushStack(jQuery.grep(this, function(_elem, i) {
+                return i % 2;
+            }));
+        },
         eq: function(i) {
             var len = this.length, j = +i + (0 > i ? len : 0);
             return this.pushStack(j >= 0 && len > j ? [ this[j] ] : []);
@@ -514,10 +549,10 @@
         var options, name, src, copy, copyIsArray, clone, target = arguments[0] || {}, i = 1, length = arguments.length, deep = !1;
         for ("boolean" == typeof target && (deep = target, target = arguments[i] || {}, 
         i++), "object" == typeof target || isFunction(target) || (target = {}), i === length && (target = this, 
-        i--); length > i; i++) if (null != (options = arguments[i])) for (name in options) src = target[name], 
-        copy = options[name], target !== copy && (deep && copy && (jQuery.isPlainObject(copy) || (copyIsArray = Array.isArray(copy))) ? (copyIsArray ? (copyIsArray = !1, 
-        clone = src && Array.isArray(src) ? src : []) : clone = src && jQuery.isPlainObject(src) ? src : {}, 
-        target[name] = jQuery.extend(deep, clone, copy)) : void 0 !== copy && (target[name] = copy));
+        i--); length > i; i++) if (null != (options = arguments[i])) for (name in options) copy = options[name], 
+        "__proto__" !== name && target !== copy && (deep && copy && (jQuery.isPlainObject(copy) || (copyIsArray = Array.isArray(copy))) ? (src = target[name], 
+        clone = copyIsArray && !Array.isArray(src) ? [] : copyIsArray || jQuery.isPlainObject(src) ? src : {}, 
+        copyIsArray = !1, target[name] = jQuery.extend(deep, clone, copy)) : void 0 !== copy && (target[name] = copy));
         return target;
     }, jQuery.extend({
         expando: "jQuery" + (version + Math.random()).replace(/\D/g, ""),
@@ -536,16 +571,15 @@
             for (name in obj) return !1;
             return !0;
         },
-        globalEval: function(code) {
-            DOMEval(code);
+        globalEval: function(code, options, doc) {
+            DOMEval(code, {
+                nonce: options && options.nonce
+            }, doc);
         },
         each: function(obj, callback) {
             var length, i = 0;
             if (isArrayLike(obj)) for (length = obj.length; length > i && callback.call(obj[i], i, obj[i]) !== !1; i++) ; else for (i in obj) if (callback.call(obj[i], i, obj[i]) === !1) break;
             return obj;
-        },
-        trim: function(text) {
-            return null == text ? "" : (text + "").replace(rtrim, "");
         },
         makeArray: function(arr, results) {
             var ret = results || [];
@@ -569,20 +603,19 @@
             if (isArrayLike(elems)) for (length = elems.length; length > i; i++) value = callback(elems[i], i, arg), 
             null != value && ret.push(value); else for (i in elems) value = callback(elems[i], i, arg), 
             null != value && ret.push(value);
-            return concat.apply([], ret);
+            return flat(ret);
         },
         guid: 1,
         support: support
     }), "function" == typeof Symbol && (jQuery.fn[Symbol.iterator] = arr[Symbol.iterator]), 
-    jQuery.each("Boolean Number String Function Array Date RegExp Object Error Symbol".split(" "), function(i, name) {
+    jQuery.each("Boolean Number String Function Array Date RegExp Object Error Symbol".split(" "), function(_i, name) {
         class2type["[object " + name + "]"] = name.toLowerCase();
     });
     var Sizzle = function(window) {
         function Sizzle(selector, context, results, seed) {
             var m, i, elem, nid, match, groups, newSelector, newContext = context && context.ownerDocument, nodeType = context ? context.nodeType : 9;
             if (results = results || [], "string" != typeof selector || !selector || 1 !== nodeType && 9 !== nodeType && 11 !== nodeType) return results;
-            if (!seed && ((context ? context.ownerDocument || context : preferredDoc) !== document && setDocument(context), 
-            context = context || document, documentIsHTML)) {
+            if (!seed && (setDocument(context), context = context || document, documentIsHTML)) {
                 if (11 !== nodeType && (match = rquickExpr.exec(selector))) if (m = match[1]) {
                     if (9 === nodeType) {
                         if (!(elem = context.getElementById(m))) return results;
@@ -595,15 +628,18 @@
                     if ((m = match[3]) && support.getElementsByClassName && context.getElementsByClassName) return push.apply(results, context.getElementsByClassName(m)), 
                     results;
                 }
-                if (support.qsa && !compilerCache[selector + " "] && (!rbuggyQSA || !rbuggyQSA.test(selector))) {
-                    if (1 !== nodeType) newContext = context, newSelector = selector; else if ("object" !== context.nodeName.toLowerCase()) {
-                        for ((nid = context.getAttribute("id")) ? nid = nid.replace(rcssescape, fcssescape) : context.setAttribute("id", nid = expando), 
-                        groups = tokenize(selector), i = groups.length; i--; ) groups[i] = "#" + nid + " " + toSelector(groups[i]);
-                        newSelector = groups.join(","), newContext = rsibling.test(selector) && testContext(context.parentNode) || context;
+                if (support.qsa && !nonnativeSelectorCache[selector + " "] && (!rbuggyQSA || !rbuggyQSA.test(selector)) && (1 !== nodeType || "object" !== context.nodeName.toLowerCase())) {
+                    if (newSelector = selector, newContext = context, 1 === nodeType && (rdescend.test(selector) || rcombinators.test(selector))) {
+                        for (newContext = rsibling.test(selector) && testContext(context.parentNode) || context, 
+                        newContext === context && support.scope || ((nid = context.getAttribute("id")) ? nid = nid.replace(rcssescape, fcssescape) : context.setAttribute("id", nid = expando)), 
+                        groups = tokenize(selector), i = groups.length; i--; ) groups[i] = (nid ? "#" + nid : ":scope") + " " + toSelector(groups[i]);
+                        newSelector = groups.join(",");
                     }
-                    if (newSelector) try {
+                    try {
                         return push.apply(results, newContext.querySelectorAll(newSelector)), results;
-                    } catch (qsaError) {} finally {
+                    } catch (qsaError) {
+                        nonnativeSelectorCache(selector, !0);
+                    } finally {
                         nid === expando && context.removeAttribute("id");
                     }
                 }
@@ -653,7 +689,7 @@
         }
         function createDisabledPseudo(disabled) {
             return function(elem) {
-                return "form" in elem ? elem.parentNode && elem.disabled === !1 ? "label" in elem ? "label" in elem.parentNode ? elem.parentNode.disabled === disabled : elem.disabled === disabled : elem.isDisabled === disabled || elem.isDisabled !== !disabled && disabledAncestor(elem) === disabled : elem.disabled === disabled : "label" in elem ? elem.disabled === disabled : !1;
+                return "form" in elem ? elem.parentNode && elem.disabled === !1 ? "label" in elem ? "label" in elem.parentNode ? elem.parentNode.disabled === disabled : elem.disabled === disabled : elem.isDisabled === disabled || elem.isDisabled !== !disabled && inDisabledFieldset(elem) === disabled : elem.disabled === disabled : "label" in elem ? elem.disabled === disabled : !1;
             };
         }
         function createPositionalPseudo(fn) {
@@ -744,9 +780,9 @@
         function matcherFromGroupMatchers(elementMatchers, setMatchers) {
             var bySet = setMatchers.length > 0, byElement = elementMatchers.length > 0, superMatcher = function(seed, context, xml, results, outermost) {
                 var elem, j, matcher, matchedCount = 0, i = "0", unmatched = seed && [], setMatched = [], contextBackup = outermostContext, elems = seed || byElement && Expr.find.TAG("*", outermost), dirrunsUnique = dirruns += null == contextBackup ? 1 : Math.random() || .1, len = elems.length;
-                for (outermost && (outermostContext = context === document || context || outermost); i !== len && null != (elem = elems[i]); i++) {
+                for (outermost && (outermostContext = context == document || context || outermost); i !== len && null != (elem = elems[i]); i++) {
                     if (byElement && elem) {
-                        for (j = 0, context || elem.ownerDocument === document || (setDocument(elem), xml = !documentIsHTML); matcher = elementMatchers[j++]; ) if (matcher(elem, context || document, xml)) {
+                        for (j = 0, context || elem.ownerDocument == document || (setDocument(elem), xml = !documentIsHTML); matcher = elementMatchers[j++]; ) if (matcher(elem, context || document, xml)) {
                             results.push(elem);
                             break;
                         }
@@ -767,12 +803,12 @@
             };
             return bySet ? markFunction(superMatcher) : superMatcher;
         }
-        var i, support, Expr, getText, isXML, tokenize, compile, select, outermostContext, sortInput, hasDuplicate, setDocument, document, docElem, documentIsHTML, rbuggyQSA, rbuggyMatches, matches, contains, expando = "sizzle" + 1 * new Date(), preferredDoc = window.document, dirruns = 0, done = 0, classCache = createCache(), tokenCache = createCache(), compilerCache = createCache(), sortOrder = function(a, b) {
+        var i, support, Expr, getText, isXML, tokenize, compile, select, outermostContext, sortInput, hasDuplicate, setDocument, document, docElem, documentIsHTML, rbuggyQSA, rbuggyMatches, matches, contains, expando = "sizzle" + 1 * new Date(), preferredDoc = window.document, dirruns = 0, done = 0, classCache = createCache(), tokenCache = createCache(), compilerCache = createCache(), nonnativeSelectorCache = createCache(), sortOrder = function(a, b) {
             return a === b && (hasDuplicate = !0), 0;
-        }, hasOwn = {}.hasOwnProperty, arr = [], pop = arr.pop, push_native = arr.push, push = arr.push, slice = arr.slice, indexOf = function(list, elem) {
+        }, hasOwn = {}.hasOwnProperty, arr = [], pop = arr.pop, pushNative = arr.push, push = arr.push, slice = arr.slice, indexOf = function(list, elem) {
             for (var i = 0, len = list.length; len > i; i++) if (list[i] === elem) return i;
             return -1;
-        }, booleans = "checked|selected|async|autofocus|autoplay|controls|defer|disabled|hidden|ismap|loop|multiple|open|readonly|required|scoped", whitespace = "[\\x20\\t\\r\\n\\f]", identifier = "(?:\\\\.|[\\w-]|[^\x00-\\xa0])+", attributes = "\\[" + whitespace + "*(" + identifier + ")(?:" + whitespace + "*([*^$|!~]?=)" + whitespace + "*(?:'((?:\\\\.|[^\\\\'])*)'|\"((?:\\\\.|[^\\\\\"])*)\"|(" + identifier + "))|)" + whitespace + "*\\]", pseudos = ":(" + identifier + ")(?:\\((('((?:\\\\.|[^\\\\'])*)'|\"((?:\\\\.|[^\\\\\"])*)\")|((?:\\\\.|[^\\\\()[\\]]|" + attributes + ")*)|.*)\\)|)", rwhitespace = new RegExp(whitespace + "+", "g"), rtrim = new RegExp("^" + whitespace + "+|((?:^|[^\\\\])(?:\\\\.)*)" + whitespace + "+$", "g"), rcomma = new RegExp("^" + whitespace + "*," + whitespace + "*"), rcombinators = new RegExp("^" + whitespace + "*([>+~]|" + whitespace + ")" + whitespace + "*"), rattributeQuotes = new RegExp("=" + whitespace + "*([^\\]'\"]*?)" + whitespace + "*\\]", "g"), rpseudo = new RegExp(pseudos), ridentifier = new RegExp("^" + identifier + "$"), matchExpr = {
+        }, booleans = "checked|selected|async|autofocus|autoplay|controls|defer|disabled|hidden|ismap|loop|multiple|open|readonly|required|scoped", whitespace = "[\\x20\\t\\r\\n\\f]", identifier = "(?:\\\\[\\da-fA-F]{1,6}" + whitespace + "?|\\\\[^\\r\\n\\f]|[\\w-]|[^\x00-\\x7f])+", attributes = "\\[" + whitespace + "*(" + identifier + ")(?:" + whitespace + "*([*^$|!~]?=)" + whitespace + "*(?:'((?:\\\\.|[^\\\\'])*)'|\"((?:\\\\.|[^\\\\\"])*)\"|(" + identifier + "))|)" + whitespace + "*\\]", pseudos = ":(" + identifier + ")(?:\\((('((?:\\\\.|[^\\\\'])*)'|\"((?:\\\\.|[^\\\\\"])*)\")|((?:\\\\.|[^\\\\()[\\]]|" + attributes + ")*)|.*)\\)|)", rwhitespace = new RegExp(whitespace + "+", "g"), rtrim = new RegExp("^" + whitespace + "+|((?:^|[^\\\\])(?:\\\\.)*)" + whitespace + "+$", "g"), rcomma = new RegExp("^" + whitespace + "*," + whitespace + "*"), rcombinators = new RegExp("^" + whitespace + "*([>+~]|" + whitespace + ")" + whitespace + "*"), rdescend = new RegExp(whitespace + "|>"), rpseudo = new RegExp(pseudos), ridentifier = new RegExp("^" + identifier + "$"), matchExpr = {
             ID: new RegExp("^#(" + identifier + ")"),
             CLASS: new RegExp("^\\.(" + identifier + ")"),
             TAG: new RegExp("^(" + identifier + "|[*])"),
@@ -781,15 +817,15 @@
             CHILD: new RegExp("^:(only|first|last|nth|nth-last)-(child|of-type)(?:\\(" + whitespace + "*(even|odd|(([+-]|)(\\d*)n|)" + whitespace + "*(?:([+-]|)" + whitespace + "*(\\d+)|))" + whitespace + "*\\)|)", "i"),
             bool: new RegExp("^(?:" + booleans + ")$", "i"),
             needsContext: new RegExp("^" + whitespace + "*[>+~]|:(even|odd|eq|gt|lt|nth|first|last)(?:\\(" + whitespace + "*((?:-\\d)?\\d*)" + whitespace + "*\\)|)(?=[^-]|$)", "i")
-        }, rinputs = /^(?:input|select|textarea|button)$/i, rheader = /^h\d$/i, rnative = /^[^{]+\{\s*\[native \w/, rquickExpr = /^(?:#([\w-]+)|(\w+)|\.([\w-]+))$/, rsibling = /[+~]/, runescape = new RegExp("\\\\([\\da-f]{1,6}" + whitespace + "?|(" + whitespace + ")|.)", "ig"), funescape = function(_, escaped, escapedWhitespace) {
-            var high = "0x" + escaped - 65536;
-            return high !== high || escapedWhitespace ? escaped : 0 > high ? String.fromCharCode(high + 65536) : String.fromCharCode(high >> 10 | 55296, 1023 & high | 56320);
+        }, rhtml = /HTML$/i, rinputs = /^(?:input|select|textarea|button)$/i, rheader = /^h\d$/i, rnative = /^[^{]+\{\s*\[native \w/, rquickExpr = /^(?:#([\w-]+)|(\w+)|\.([\w-]+))$/, rsibling = /[+~]/, runescape = new RegExp("\\\\[\\da-fA-F]{1,6}" + whitespace + "?|\\\\([^\\r\\n\\f])", "g"), funescape = function(escape, nonHex) {
+            var high = "0x" + escape.slice(1) - 65536;
+            return nonHex ? nonHex : 0 > high ? String.fromCharCode(high + 65536) : String.fromCharCode(high >> 10 | 55296, 1023 & high | 56320);
         }, rcssescape = /([\0-\x1f\x7f]|^-?\d)|^-$|[^\0-\x1f\x7f-\uFFFF\w-]/g, fcssescape = function(ch, asCodePoint) {
             return asCodePoint ? "\x00" === ch ? "�" : ch.slice(0, -1) + "\\" + ch.charCodeAt(ch.length - 1).toString(16) + " " : "\\" + ch;
         }, unloadHandler = function() {
             setDocument();
-        }, disabledAncestor = addCombinator(function(elem) {
-            return elem.disabled === !0 && ("form" in elem || "label" in elem);
+        }, inDisabledFieldset = addCombinator(function(elem) {
+            return elem.disabled === !0 && "fieldset" === elem.nodeName.toLowerCase();
         }, {
             dir: "parentNode",
             next: "legend"
@@ -800,7 +836,7 @@
         } catch (e) {
             push = {
                 apply: arr.length ? function(target, els) {
-                    push_native.apply(target, slice.call(els));
+                    pushNative.apply(target, slice.call(els));
                 } : function(target, els) {
                     for (var j = target.length, i = 0; target[j++] = els[i++]; ) ;
                     target.length = j - 1;
@@ -808,13 +844,15 @@
             };
         }
         support = Sizzle.support = {}, isXML = Sizzle.isXML = function(elem) {
-            var documentElement = elem && (elem.ownerDocument || elem).documentElement;
-            return documentElement ? "HTML" !== documentElement.nodeName : !1;
+            var namespace = elem.namespaceURI, docElem = (elem.ownerDocument || elem).documentElement;
+            return !rhtml.test(namespace || docElem && docElem.nodeName || "HTML");
         }, setDocument = Sizzle.setDocument = function(node) {
             var hasCompare, subWindow, doc = node ? node.ownerDocument || node : preferredDoc;
-            return doc !== document && 9 === doc.nodeType && doc.documentElement ? (document = doc, 
-            docElem = document.documentElement, documentIsHTML = !isXML(document), preferredDoc !== document && (subWindow = document.defaultView) && subWindow.top !== subWindow && (subWindow.addEventListener ? subWindow.addEventListener("unload", unloadHandler, !1) : subWindow.attachEvent && subWindow.attachEvent("onunload", unloadHandler)), 
-            support.attributes = assert(function(el) {
+            return doc != document && 9 === doc.nodeType && doc.documentElement ? (document = doc, 
+            docElem = document.documentElement, documentIsHTML = !isXML(document), preferredDoc != document && (subWindow = document.defaultView) && subWindow.top !== subWindow && (subWindow.addEventListener ? subWindow.addEventListener("unload", unloadHandler, !1) : subWindow.attachEvent && subWindow.attachEvent("onunload", unloadHandler)), 
+            support.scope = assert(function(el) {
+                return docElem.appendChild(el).appendChild(document.createElement("div")), "undefined" != typeof el.querySelectorAll && !el.querySelectorAll(":scope fieldset div").length;
+            }), support.attributes = assert(function(el) {
                 return el.className = "i", !el.getAttribute("className");
             }), support.getElementsByTagName = assert(function(el) {
                 return el.appendChild(document.createComment("")), !el.getElementsByTagName("*").length;
@@ -859,11 +897,14 @@
             }, Expr.find.CLASS = support.getElementsByClassName && function(className, context) {
                 return "undefined" != typeof context.getElementsByClassName && documentIsHTML ? context.getElementsByClassName(className) : void 0;
             }, rbuggyMatches = [], rbuggyQSA = [], (support.qsa = rnative.test(document.querySelectorAll)) && (assert(function(el) {
+                var input;
                 docElem.appendChild(el).innerHTML = "<a id='" + expando + "'></a><select id='" + expando + "-\r\\' msallowcapture=''><option selected=''></option></select>", 
                 el.querySelectorAll("[msallowcapture^='']").length && rbuggyQSA.push("[*^$]=" + whitespace + "*(?:''|\"\")"), 
                 el.querySelectorAll("[selected]").length || rbuggyQSA.push("\\[" + whitespace + "*(?:value|" + booleans + ")"), 
-                el.querySelectorAll("[id~=" + expando + "-]").length || rbuggyQSA.push("~="), el.querySelectorAll(":checked").length || rbuggyQSA.push(":checked"), 
-                el.querySelectorAll("a#" + expando + "+*").length || rbuggyQSA.push(".#.+[+~]");
+                el.querySelectorAll("[id~=" + expando + "-]").length || rbuggyQSA.push("~="), input = document.createElement("input"), 
+                input.setAttribute("name", ""), el.appendChild(input), el.querySelectorAll("[name='']").length || rbuggyQSA.push("\\[" + whitespace + "*name" + whitespace + "*=" + whitespace + "*(?:''|\"\")"), 
+                el.querySelectorAll(":checked").length || rbuggyQSA.push(":checked"), el.querySelectorAll("a#" + expando + "+*").length || rbuggyQSA.push(".#.+[+~]"), 
+                el.querySelectorAll("\\\f"), rbuggyQSA.push("[\\r\\n\\f]");
             }), assert(function(el) {
                 el.innerHTML = "<a href='' disabled='disabled'></a><select disabled='disabled'><option/></select>";
                 var input = document.createElement("input");
@@ -885,32 +926,32 @@
             }, sortOrder = hasCompare ? function(a, b) {
                 if (a === b) return hasDuplicate = !0, 0;
                 var compare = !a.compareDocumentPosition - !b.compareDocumentPosition;
-                return compare ? compare : (compare = (a.ownerDocument || a) === (b.ownerDocument || b) ? a.compareDocumentPosition(b) : 1, 
-                1 & compare || !support.sortDetached && b.compareDocumentPosition(a) === compare ? a === document || a.ownerDocument === preferredDoc && contains(preferredDoc, a) ? -1 : b === document || b.ownerDocument === preferredDoc && contains(preferredDoc, b) ? 1 : sortInput ? indexOf(sortInput, a) - indexOf(sortInput, b) : 0 : 4 & compare ? -1 : 1);
+                return compare ? compare : (compare = (a.ownerDocument || a) == (b.ownerDocument || b) ? a.compareDocumentPosition(b) : 1, 
+                1 & compare || !support.sortDetached && b.compareDocumentPosition(a) === compare ? a == document || a.ownerDocument == preferredDoc && contains(preferredDoc, a) ? -1 : b == document || b.ownerDocument == preferredDoc && contains(preferredDoc, b) ? 1 : sortInput ? indexOf(sortInput, a) - indexOf(sortInput, b) : 0 : 4 & compare ? -1 : 1);
             } : function(a, b) {
                 if (a === b) return hasDuplicate = !0, 0;
                 var cur, i = 0, aup = a.parentNode, bup = b.parentNode, ap = [ a ], bp = [ b ];
-                if (!aup || !bup) return a === document ? -1 : b === document ? 1 : aup ? -1 : bup ? 1 : sortInput ? indexOf(sortInput, a) - indexOf(sortInput, b) : 0;
+                if (!aup || !bup) return a == document ? -1 : b == document ? 1 : aup ? -1 : bup ? 1 : sortInput ? indexOf(sortInput, a) - indexOf(sortInput, b) : 0;
                 if (aup === bup) return siblingCheck(a, b);
                 for (cur = a; cur = cur.parentNode; ) ap.unshift(cur);
                 for (cur = b; cur = cur.parentNode; ) bp.unshift(cur);
                 for (;ap[i] === bp[i]; ) i++;
-                return i ? siblingCheck(ap[i], bp[i]) : ap[i] === preferredDoc ? -1 : bp[i] === preferredDoc ? 1 : 0;
+                return i ? siblingCheck(ap[i], bp[i]) : ap[i] == preferredDoc ? -1 : bp[i] == preferredDoc ? 1 : 0;
             }, document) : document;
         }, Sizzle.matches = function(expr, elements) {
             return Sizzle(expr, null, null, elements);
         }, Sizzle.matchesSelector = function(elem, expr) {
-            if ((elem.ownerDocument || elem) !== document && setDocument(elem), expr = expr.replace(rattributeQuotes, "='$1']"), 
-            support.matchesSelector && documentIsHTML && !compilerCache[expr + " "] && (!rbuggyMatches || !rbuggyMatches.test(expr)) && (!rbuggyQSA || !rbuggyQSA.test(expr))) try {
+            if (setDocument(elem), support.matchesSelector && documentIsHTML && !nonnativeSelectorCache[expr + " "] && (!rbuggyMatches || !rbuggyMatches.test(expr)) && (!rbuggyQSA || !rbuggyQSA.test(expr))) try {
                 var ret = matches.call(elem, expr);
                 if (ret || support.disconnectedMatch || elem.document && 11 !== elem.document.nodeType) return ret;
-            } catch (e) {}
+            } catch (e) {
+                nonnativeSelectorCache(expr, !0);
+            }
             return Sizzle(expr, document, null, [ elem ]).length > 0;
         }, Sizzle.contains = function(context, elem) {
-            return (context.ownerDocument || context) !== document && setDocument(context), 
-            contains(context, elem);
+            return (context.ownerDocument || context) != document && setDocument(context), contains(context, elem);
         }, Sizzle.attr = function(elem, name) {
-            (elem.ownerDocument || elem) !== document && setDocument(elem);
+            (elem.ownerDocument || elem) != document && setDocument(elem);
             var fn = Expr.attrHandle[name.toLowerCase()], val = fn && hasOwn.call(Expr.attrHandle, name.toLowerCase()) ? fn(elem, name, !documentIsHTML) : void 0;
             return void 0 !== val ? val : support.attributes || !documentIsHTML ? elem.getAttribute(name) : (val = elem.getAttributeNode(name)) && val.specified ? val.value : null;
         }, Sizzle.escape = function(sel) {
@@ -994,11 +1035,11 @@
                         return null == result ? "!=" === operator : operator ? (result += "", "=" === operator ? result === check : "!=" === operator ? result !== check : "^=" === operator ? check && 0 === result.indexOf(check) : "*=" === operator ? check && result.indexOf(check) > -1 : "$=" === operator ? check && result.slice(-check.length) === check : "~=" === operator ? (" " + result.replace(rwhitespace, " ") + " ").indexOf(check) > -1 : "|=" === operator ? result === check || result.slice(0, check.length + 1) === check + "-" : !1) : !0;
                     };
                 },
-                CHILD: function(type, what, argument, first, last) {
+                CHILD: function(type, what, _argument, first, last) {
                     var simple = "nth" !== type.slice(0, 3), forward = "last" !== type.slice(-4), ofType = "of-type" === what;
                     return 1 === first && 0 === last ? function(elem) {
                         return !!elem.parentNode;
-                    } : function(elem, context, xml) {
+                    } : function(elem, _context, xml) {
                         var cache, uniqueCache, outerCache, node, nodeIndex, start, dir = simple !== forward ? "nextSibling" : "previousSibling", parent = elem.parentNode, name = ofType && elem.nodeName.toLowerCase(), useCache = !xml && !ofType, diff = !1;
                         if (parent) {
                             if (simple) {
@@ -1038,9 +1079,9 @@
             pseudos: {
                 not: markFunction(function(selector) {
                     var input = [], results = [], matcher = compile(selector.replace(rtrim, "$1"));
-                    return matcher[expando] ? markFunction(function(seed, matches, context, xml) {
+                    return matcher[expando] ? markFunction(function(seed, matches, _context, xml) {
                         for (var elem, unmatched = matcher(seed, null, xml, []), i = seed.length; i--; ) (elem = unmatched[i]) && (seed[i] = !(matches[i] = elem));
-                    }) : function(elem, context, xml) {
+                    }) : function(elem, _context, xml) {
                         return input[0] = elem, matcher(input, null, xml, results), input[0] = null, !results.pop();
                     };
                 }),
@@ -1051,7 +1092,7 @@
                 }),
                 contains: markFunction(function(text) {
                     return text = text.replace(runescape, funescape), function(elem) {
-                        return (elem.textContent || elem.innerText || getText(elem)).indexOf(text) > -1;
+                        return (elem.textContent || getText(elem)).indexOf(text) > -1;
                     };
                 }),
                 lang: markFunction(function(lang) {
@@ -1106,10 +1147,10 @@
                 first: createPositionalPseudo(function() {
                     return [ 0 ];
                 }),
-                last: createPositionalPseudo(function(matchIndexes, length) {
+                last: createPositionalPseudo(function(_matchIndexes, length) {
                     return [ length - 1 ];
                 }),
-                eq: createPositionalPseudo(function(matchIndexes, length, argument) {
+                eq: createPositionalPseudo(function(_matchIndexes, length, argument) {
                     return [ 0 > argument ? argument + length : argument ];
                 }),
                 even: createPositionalPseudo(function(matchIndexes, length) {
@@ -1121,7 +1162,7 @@
                     return matchIndexes;
                 }),
                 lt: createPositionalPseudo(function(matchIndexes, length, argument) {
-                    for (var i = 0 > argument ? argument + length : argument; --i >= 0; ) matchIndexes.push(i);
+                    for (var i = 0 > argument ? argument + length : argument > length ? length : argument; --i >= 0; ) matchIndexes.push(i);
                     return matchIndexes;
                 }),
                 gt: createPositionalPseudo(function(matchIndexes, length, argument) {
@@ -1196,7 +1237,7 @@
             return isXML ? void 0 : elem.getAttribute(name, "type" === name.toLowerCase() ? 1 : 2);
         }), support.attributes && assert(function(el) {
             return el.innerHTML = "<input/>", el.firstChild.setAttribute("value", ""), "" === el.firstChild.getAttribute("value");
-        }) || addHandle("value", function(elem, name, isXML) {
+        }) || addHandle("value", function(elem, _name, isXML) {
             return isXML || "input" !== elem.nodeName.toLowerCase() ? void 0 : elem.defaultValue;
         }), assert(function(el) {
             return null == el.getAttribute("disabled");
@@ -1297,7 +1338,7 @@
         parents: function(elem) {
             return dir(elem, "parentNode");
         },
-        parentsUntil: function(elem, i, until) {
+        parentsUntil: function(elem, _i, until) {
             return dir(elem, "parentNode", until);
         },
         next: function(elem) {
@@ -1312,10 +1353,10 @@
         prevAll: function(elem) {
             return dir(elem, "previousSibling");
         },
-        nextUntil: function(elem, i, until) {
+        nextUntil: function(elem, _i, until) {
             return dir(elem, "nextSibling", until);
         },
-        prevUntil: function(elem, i, until) {
+        prevUntil: function(elem, _i, until) {
             return dir(elem, "previousSibling", until);
         },
         siblings: function(elem) {
@@ -1325,7 +1366,7 @@
             return siblings(elem.firstChild);
         },
         contents: function(elem) {
-            return nodeName(elem, "iframe") ? elem.contentDocument : (nodeName(elem, "template") && (elem = elem.content || elem), 
+            return null != elem.contentDocument && getProto(elem.contentDocument) ? elem.contentDocument : (nodeName(elem, "template") && (elem = elem.content || elem), 
             jQuery.merge([], elem.childNodes));
         }
     }, function(name, fn) {
@@ -1403,7 +1444,7 @@
                 pipe: function() {
                     var fns = arguments;
                     return jQuery.Deferred(function(newDefer) {
-                        jQuery.each(tuples, function(i, tuple) {
+                        jQuery.each(tuples, function(_i, tuple) {
                             var fn = isFunction(fns[tuple[4]]) && fns[tuple[4]];
                             deferred[tuple[1]](function() {
                                 var returned = fn && fn.apply(this, arguments);
@@ -1499,7 +1540,7 @@
             chainable = !0;
             for (i in key) access(elems, fn, i, key[i], !0, emptyGet, raw);
         } else if (void 0 !== value && (chainable = !0, isFunction(value) || (raw = !0), 
-        bulk && (raw ? (fn.call(elems, value), fn = null) : (bulk = fn, fn = function(elem, key, value) {
+        bulk && (raw ? (fn.call(elems, value), fn = null) : (bulk = fn, fn = function(elem, _key, value) {
             return bulk.call(jQuery(elem), value);
         })), fn)) for (;len > i; i++) fn(elems[i], key, raw ? value : value.call(elems[i], i, fn(elems[i], key)));
         return chainable ? elems : bulk ? fn.call(elems) : len ? fn(elems[0], key) : emptyGet;
@@ -1635,14 +1676,16 @@
             return resolve(), defer.promise(obj);
         }
     });
-    var pnum = /[+-]?(?:\d*\.|)\d+(?:[eE][+-]?\d+|)/.source, rcssNum = new RegExp("^(?:([+-])=|)(" + pnum + ")([a-z%]*)$", "i"), cssExpand = [ "Top", "Right", "Bottom", "Left" ], isHiddenWithinTree = function(elem, el) {
-        return elem = el || elem, "none" === elem.style.display || "" === elem.style.display && jQuery.contains(elem.ownerDocument, elem) && "none" === jQuery.css(elem, "display");
-    }, swap = function(elem, options, callback, args) {
-        var ret, name, old = {};
-        for (name in options) old[name] = elem.style[name], elem.style[name] = options[name];
-        ret = callback.apply(elem, args || []);
-        for (name in options) elem.style[name] = old[name];
-        return ret;
+    var pnum = /[+-]?(?:\d*\.|)\d+(?:[eE][+-]?\d+|)/.source, rcssNum = new RegExp("^(?:([+-])=|)(" + pnum + ")([a-z%]*)$", "i"), cssExpand = [ "Top", "Right", "Bottom", "Left" ], documentElement = document.documentElement, isAttached = function(elem) {
+        return jQuery.contains(elem.ownerDocument, elem);
+    }, composed = {
+        composed: !0
+    };
+    documentElement.getRootNode && (isAttached = function(elem) {
+        return jQuery.contains(elem.ownerDocument, elem) || elem.getRootNode(composed) === elem.ownerDocument;
+    });
+    var isHiddenWithinTree = function(elem, el) {
+        return elem = el || elem, "none" === elem.style.display || "" === elem.style.display && isAttached(elem) && "none" === jQuery.css(elem, "display");
     }, defaultDisplayMap = {};
     jQuery.fn.extend({
         show: function() {
@@ -1657,31 +1700,31 @@
             });
         }
     });
-    var rcheckableType = /^(?:checkbox|radio)$/i, rtagName = /<([a-z][^\/\0>\x20\t\r\n\f]+)/i, rscriptType = /^$|^module$|\/(?:java|ecma)script/i, wrapMap = {
-        option: [ 1, "<select multiple='multiple'>", "</select>" ],
+    var rcheckableType = /^(?:checkbox|radio)$/i, rtagName = /<([a-z][^\/\0>\x20\t\r\n\f]*)/i, rscriptType = /^$|^module$|\/(?:java|ecma)script/i;
+    !function() {
+        var fragment = document.createDocumentFragment(), div = fragment.appendChild(document.createElement("div")), input = document.createElement("input");
+        input.setAttribute("type", "radio"), input.setAttribute("checked", "checked"), input.setAttribute("name", "t"), 
+        div.appendChild(input), support.checkClone = div.cloneNode(!0).cloneNode(!0).lastChild.checked, 
+        div.innerHTML = "<textarea>x</textarea>", support.noCloneChecked = !!div.cloneNode(!0).lastChild.defaultValue, 
+        div.innerHTML = "<option></option>", support.option = !!div.lastChild;
+    }();
+    var wrapMap = {
         thead: [ 1, "<table>", "</table>" ],
         col: [ 2, "<table><colgroup>", "</colgroup></table>" ],
         tr: [ 2, "<table><tbody>", "</tbody></table>" ],
         td: [ 3, "<table><tbody><tr>", "</tr></tbody></table>" ],
         _default: [ 0, "", "" ]
     };
-    wrapMap.optgroup = wrapMap.option, wrapMap.tbody = wrapMap.tfoot = wrapMap.colgroup = wrapMap.caption = wrapMap.thead, 
-    wrapMap.th = wrapMap.td;
-    var rhtml = /<|&#?\w+;/;
-    !function() {
-        var fragment = document.createDocumentFragment(), div = fragment.appendChild(document.createElement("div")), input = document.createElement("input");
-        input.setAttribute("type", "radio"), input.setAttribute("checked", "checked"), input.setAttribute("name", "t"), 
-        div.appendChild(input), support.checkClone = div.cloneNode(!0).cloneNode(!0).lastChild.checked, 
-        div.innerHTML = "<textarea>x</textarea>", support.noCloneChecked = !!div.cloneNode(!0).lastChild.defaultValue;
-    }();
-    var documentElement = document.documentElement, rkeyEvent = /^key/, rmouseEvent = /^(?:mouse|pointer|contextmenu|drag|drop)|click/, rtypenamespace = /^([^.]*)(?:\.(.+)|)/;
+    wrapMap.tbody = wrapMap.tfoot = wrapMap.colgroup = wrapMap.caption = wrapMap.thead, 
+    wrapMap.th = wrapMap.td, support.option || (wrapMap.optgroup = wrapMap.option = [ 1, "<select multiple='multiple'>", "</select>" ]);
+    var rhtml = /<|&#?\w+;/, rkeyEvent = /^key/, rmouseEvent = /^(?:mouse|pointer|contextmenu|drag|drop)|click/, rtypenamespace = /^([^.]*)(?:\.(.+)|)/;
     jQuery.event = {
         global: {},
         add: function(elem, types, handler, data, selector) {
             var handleObjIn, eventHandle, tmp, events, t, handleObj, special, handlers, type, namespaces, origType, elemData = dataPriv.get(elem);
-            if (elemData) for (handler.handler && (handleObjIn = handler, handler = handleObjIn.handler, 
+            if (acceptData(elem)) for (handler.handler && (handleObjIn = handler, handler = handleObjIn.handler, 
             selector = handleObjIn.selector), selector && jQuery.find.matchesSelector(documentElement, selector), 
-            handler.guid || (handler.guid = jQuery.guid++), (events = elemData.events) || (events = elemData.events = {}), 
+            handler.guid || (handler.guid = jQuery.guid++), (events = elemData.events) || (events = elemData.events = Object.create(null)), 
             (eventHandle = elemData.handle) || (eventHandle = elemData.handle = function(e) {
                 return "undefined" != typeof jQuery && jQuery.event.triggered !== e.type ? jQuery.event.dispatch.apply(elem, arguments) : void 0;
             }), types = (types || "").match(rnothtmlwhite) || [ "" ], t = types.length; t--; ) tmp = rtypenamespace.exec(types[t]) || [], 
@@ -1718,11 +1761,11 @@
             }
         },
         dispatch: function(nativeEvent) {
-            var i, j, ret, matched, handleObj, handlerQueue, event = jQuery.event.fix(nativeEvent), args = new Array(arguments.length), handlers = (dataPriv.get(this, "events") || {})[event.type] || [], special = jQuery.event.special[event.type] || {};
+            var i, j, ret, matched, handleObj, handlerQueue, args = new Array(arguments.length), event = jQuery.event.fix(nativeEvent), handlers = (dataPriv.get(this, "events") || Object.create(null))[event.type] || [], special = jQuery.event.special[event.type] || {};
             for (args[0] = event, i = 1; i < arguments.length; i++) args[i] = arguments[i];
             if (event.delegateTarget = this, !special.preDispatch || special.preDispatch.call(this, event) !== !1) {
                 for (handlerQueue = jQuery.event.handlers.call(this, event, handlers), i = 0; (matched = handlerQueue[i++]) && !event.isPropagationStopped(); ) for (event.currentTarget = matched.elem, 
-                j = 0; (handleObj = matched.handlers[j++]) && !event.isImmediatePropagationStopped(); ) (!event.rnamespace || event.rnamespace.test(handleObj.namespace)) && (event.handleObj = handleObj, 
+                j = 0; (handleObj = matched.handlers[j++]) && !event.isImmediatePropagationStopped(); ) (!event.rnamespace || handleObj.namespace === !1 || event.rnamespace.test(handleObj.namespace)) && (event.handleObj = handleObj, 
                 event.data = handleObj.data, ret = ((jQuery.event.special[handleObj.origType] || {}).handle || handleObj.handler).apply(matched.elem, args), 
                 void 0 !== ret && (event.result = ret) === !1 && (event.preventDefault(), event.stopPropagation()));
                 return special.postDispatch && special.postDispatch.call(this, event), event.result;
@@ -1770,25 +1813,20 @@
             load: {
                 noBubble: !0
             },
-            focus: {
-                trigger: function() {
-                    return this !== safeActiveElement() && this.focus ? (this.focus(), !1) : void 0;
-                },
-                delegateType: "focusin"
-            },
-            blur: {
-                trigger: function() {
-                    return this === safeActiveElement() && this.blur ? (this.blur(), !1) : void 0;
-                },
-                delegateType: "focusout"
-            },
             click: {
-                trigger: function() {
-                    return "checkbox" === this.type && this.click && nodeName(this, "input") ? (this.click(), 
-                    !1) : void 0;
+                setup: function(data) {
+                    var el = this || data;
+                    return rcheckableType.test(el.type) && el.click && nodeName(el, "input") && leverageNative(el, "click", returnTrue), 
+                    !1;
+                },
+                trigger: function(data) {
+                    var el = this || data;
+                    return rcheckableType.test(el.type) && el.click && nodeName(el, "input") && leverageNative(el, "click"), 
+                    !0;
                 },
                 _default: function(event) {
-                    return nodeName(event.target, "a");
+                    var target = event.target;
+                    return rcheckableType.test(target.type) && target.click && nodeName(target, "input") && dataPriv.get(target, "click") || nodeName(target, "a");
                 }
             },
             beforeunload: {
@@ -1839,6 +1877,7 @@
         shiftKey: !0,
         view: !0,
         "char": !0,
+        code: !0,
         charCode: !0,
         key: !0,
         keyCode: !0,
@@ -1860,6 +1899,19 @@
             return null == event.which && rkeyEvent.test(event.type) ? null != event.charCode ? event.charCode : event.keyCode : !event.which && void 0 !== button && rmouseEvent.test(event.type) ? 1 & button ? 1 : 2 & button ? 3 : 4 & button ? 2 : 0 : event.which;
         }
     }, jQuery.event.addProp), jQuery.each({
+        focus: "focusin",
+        blur: "focusout"
+    }, function(type, delegateType) {
+        jQuery.event.special[type] = {
+            setup: function() {
+                return leverageNative(this, type, expectSync), !1;
+            },
+            trigger: function() {
+                return leverageNative(this, type), !0;
+            },
+            delegateType: delegateType
+        };
+    }), jQuery.each({
         mouseenter: "mouseover",
         mouseleave: "mouseout",
         pointerenter: "pointerover",
@@ -1896,13 +1948,13 @@
             });
         }
     });
-    var rxhtmlTag = /<(?!area|br|col|embed|hr|img|input|link|meta|param)(([a-z][^\/\0>\x20\t\r\n\f]*)[^>]*)\/>/gi, rnoInnerhtml = /<script|<style|<link/i, rchecked = /checked\s*(?:[^=]|=\s*.checked.)/i, rcleanScript = /^\s*<!(?:\[CDATA\[|--)|(?:\]\]|--)>\s*$/g;
+    var rnoInnerhtml = /<script|<style|<link/i, rchecked = /checked\s*(?:[^=]|=\s*.checked.)/i, rcleanScript = /^\s*<!(?:\[CDATA\[|--)|(?:\]\]|--)>\s*$/g;
     jQuery.extend({
         htmlPrefilter: function(html) {
-            return html.replace(rxhtmlTag, "<$1></$2>");
+            return html;
         },
         clone: function(elem, dataAndEvents, deepDataAndEvents) {
-            var i, l, srcElements, destElements, clone = elem.cloneNode(!0), inPage = jQuery.contains(elem.ownerDocument, elem);
+            var i, l, srcElements, destElements, clone = elem.cloneNode(!0), inPage = isAttached(elem);
             if (!(support.noCloneChecked || 1 !== elem.nodeType && 11 !== elem.nodeType || jQuery.isXMLDoc(elem))) for (destElements = getAll(clone), 
             srcElements = getAll(elem), i = 0, l = srcElements.length; l > i; i++) fixInput(srcElements[i], destElements[i]);
             if (dataAndEvents) if (deepDataAndEvents) for (srcElements = srcElements || getAll(elem), 
@@ -2008,6 +2060,12 @@
     var rnumnonpx = new RegExp("^(" + pnum + ")(?!px)[a-z%]+$", "i"), getStyles = function(elem) {
         var view = elem.ownerDocument.defaultView;
         return view && view.opener || (view = window), view.getComputedStyle(elem);
+    }, swap = function(elem, options, callback) {
+        var ret, name, old = {};
+        for (name in options) old[name] = elem.style[name], elem.style[name] = options[name];
+        ret = callback.call(elem);
+        for (name in options) elem.style[name] = old[name];
+        return ret;
     }, rboxStyle = new RegExp(cssExpand.join("|"), "i");
     !function() {
         function computeStyleTests() {
@@ -2019,14 +2077,14 @@
                 pixelPositionVal = "1%" !== divStyle.top, reliableMarginLeftVal = 12 === roundPixelMeasures(divStyle.marginLeft), 
                 div.style.right = "60%", pixelBoxStylesVal = 36 === roundPixelMeasures(divStyle.right), 
                 boxSizingReliableVal = 36 === roundPixelMeasures(divStyle.width), div.style.position = "absolute", 
-                scrollboxSizeVal = 36 === div.offsetWidth || "absolute", documentElement.removeChild(container), 
+                scrollboxSizeVal = 12 === roundPixelMeasures(div.offsetWidth / 3), documentElement.removeChild(container), 
                 div = null;
             }
         }
         function roundPixelMeasures(measure) {
             return Math.round(parseFloat(measure));
         }
-        var pixelPositionVal, boxSizingReliableVal, scrollboxSizeVal, pixelBoxStylesVal, reliableMarginLeftVal, container = document.createElement("div"), div = document.createElement("div");
+        var pixelPositionVal, boxSizingReliableVal, scrollboxSizeVal, pixelBoxStylesVal, reliableTrDimensionsVal, reliableMarginLeftVal, container = document.createElement("div"), div = document.createElement("div");
         div.style && (div.style.backgroundClip = "content-box", div.cloneNode(!0).style.backgroundClip = "", 
         support.clearCloneStyle = "content-box" === div.style.backgroundClip, jQuery.extend(support, {
             boxSizingReliable: function() {
@@ -2043,17 +2101,25 @@
             },
             scrollboxSize: function() {
                 return computeStyleTests(), scrollboxSizeVal;
+            },
+            reliableTrDimensions: function() {
+                var table, tr, trChild, trStyle;
+                return null == reliableTrDimensionsVal && (table = document.createElement("table"), 
+                tr = document.createElement("tr"), trChild = document.createElement("div"), table.style.cssText = "position:absolute;left:-11111px", 
+                tr.style.height = "1px", trChild.style.height = "9px", documentElement.appendChild(table).appendChild(tr).appendChild(trChild), 
+                trStyle = window.getComputedStyle(tr), reliableTrDimensionsVal = parseInt(trStyle.height) > 3, 
+                documentElement.removeChild(table)), reliableTrDimensionsVal;
             }
         }));
     }();
-    var rdisplayswap = /^(none|table(?!-c[ea]).+)/, rcustomProp = /^--/, cssShow = {
+    var cssPrefixes = [ "Webkit", "Moz", "ms" ], emptyStyle = document.createElement("div").style, vendorProps = {}, rdisplayswap = /^(none|table(?!-c[ea]).+)/, rcustomProp = /^--/, cssShow = {
         position: "absolute",
         visibility: "hidden",
         display: "block"
     }, cssNormalTransform = {
         letterSpacing: "0",
         fontWeight: "400"
-    }, cssPrefixes = [ "Webkit", "Moz", "ms" ], emptyStyle = document.createElement("div").style;
+    };
     jQuery.extend({
         cssHooks: {
             opacity: {
@@ -2072,6 +2138,13 @@
             flexGrow: !0,
             flexShrink: !0,
             fontWeight: !0,
+            gridArea: !0,
+            gridColumn: !0,
+            gridColumnEnd: !0,
+            gridColumnStart: !0,
+            gridRow: !0,
+            gridRowEnd: !0,
+            gridRowStart: !0,
             lineHeight: !0,
             opacity: !0,
             order: !0,
@@ -2087,7 +2160,7 @@
                 return isCustomProp || (name = finalPropName(origName)), hooks = jQuery.cssHooks[name] || jQuery.cssHooks[origName], 
                 void 0 === value ? hooks && "get" in hooks && void 0 !== (ret = hooks.get(elem, !1, extra)) ? ret : style[name] : (type = typeof value, 
                 "string" === type && (ret = rcssNum.exec(value)) && ret[1] && (value = adjustCSS(elem, name, ret), 
-                type = "number"), null != value && value === value && ("number" === type && (value += ret && ret[3] || (jQuery.cssNumber[origName] ? "" : "px")), 
+                type = "number"), null != value && value === value && ("number" !== type || isCustomProp || (value += ret && ret[3] || (jQuery.cssNumber[origName] ? "" : "px")), 
                 support.clearCloneStyle || "" !== value || 0 !== name.indexOf("background") || (style[name] = "inherit"), 
                 hooks && "set" in hooks && void 0 === (value = hooks.set(elem, value, extra)) || (isCustomProp ? style.setProperty(name, value) : style[name] = value)), 
                 void 0);
@@ -2100,7 +2173,7 @@
             "normal" === val && name in cssNormalTransform && (val = cssNormalTransform[name]), 
             "" === extra || extra ? (num = parseFloat(val), extra === !0 || isFinite(num) ? num || 0 : val) : val;
         }
-    }), jQuery.each([ "height", "width" ], function(i, dimension) {
+    }), jQuery.each([ "height", "width" ], function(_i, dimension) {
         jQuery.cssHooks[dimension] = {
             get: function(elem, computed, extra) {
                 return computed ? !rdisplayswap.test(jQuery.css(elem, "display")) || elem.getClientRects().length && elem.getBoundingClientRect().width ? getWidthOrHeight(elem, dimension, extra) : swap(elem, cssShow, function() {
@@ -2108,8 +2181,8 @@
                 }) : void 0;
             },
             set: function(elem, value, extra) {
-                var matches, styles = getStyles(elem), isBorderBox = "border-box" === jQuery.css(elem, "boxSizing", !1, styles), subtract = extra && boxModelAdjustment(elem, dimension, extra, isBorderBox, styles);
-                return isBorderBox && support.scrollboxSize() === styles.position && (subtract -= Math.ceil(elem["offset" + dimension[0].toUpperCase() + dimension.slice(1)] - parseFloat(styles[dimension]) - boxModelAdjustment(elem, dimension, "border", !1, styles) - .5)), 
+                var matches, styles = getStyles(elem), scrollboxSizeBuggy = !support.scrollboxSize() && "absolute" === styles.position, boxSizingNeeded = scrollboxSizeBuggy || extra, isBorderBox = boxSizingNeeded && "border-box" === jQuery.css(elem, "boxSizing", !1, styles), subtract = extra ? boxModelAdjustment(elem, dimension, extra, isBorderBox, styles) : 0;
+                return isBorderBox && scrollboxSizeBuggy && (subtract -= Math.ceil(elem["offset" + dimension[0].toUpperCase() + dimension.slice(1)] - parseFloat(styles[dimension]) - boxModelAdjustment(elem, dimension, "border", !1, styles) - .5)), 
                 subtract && (matches = rcssNum.exec(value)) && "px" !== (matches[3] || "px") && (elem.style[dimension] = value, 
                 value = jQuery.css(elem, dimension)), setPositiveNumber(elem, value, subtract);
             }
@@ -2166,7 +2239,7 @@
                 result && "auto" !== result ? result : 0);
             },
             set: function(tween) {
-                jQuery.fx.step[tween.prop] ? jQuery.fx.step[tween.prop](tween) : 1 !== tween.elem.nodeType || null == tween.elem.style[jQuery.cssProps[tween.prop]] && !jQuery.cssHooks[tween.prop] ? tween.elem[tween.prop] = tween.now : jQuery.style(tween.elem, tween.prop, tween.now + tween.unit);
+                jQuery.fx.step[tween.prop] ? jQuery.fx.step[tween.prop](tween) : 1 !== tween.elem.nodeType || !jQuery.cssHooks[tween.prop] && null == tween.elem.style[finalPropName(tween.prop)] ? tween.elem[tween.prop] = tween.now : jQuery.style(tween.elem, tween.prop, tween.now + tween.unit);
             }
         }
     }, Tween.propHooks.scrollTop = Tween.propHooks.scrollLeft = {
@@ -2229,7 +2302,7 @@
                 delete hooks.stop, stop(gotoEnd);
             };
             return "string" != typeof type && (gotoEnd = clearQueue, clearQueue = type, type = void 0), 
-            clearQueue && type !== !1 && this.queue(type || "fx", []), this.each(function() {
+            clearQueue && this.queue(type || "fx", []), this.each(function() {
                 var dequeue = !0, index = null != type && type + "queueHooks", timers = jQuery.timers, data = dataPriv.get(this);
                 if (index) data[index] && data[index].stop && stopQueue(data[index]); else for (index in data) data[index] && data[index].stop && rrun.test(index) && stopQueue(data[index]);
                 for (index = timers.length; index--; ) timers[index].elem !== this || null != type && timers[index].queue !== type || (timers[index].anim.stop(gotoEnd), 
@@ -2247,7 +2320,7 @@
                 delete data.finish;
             });
         }
-    }), jQuery.each([ "toggle", "show", "hide" ], function(i, name) {
+    }), jQuery.each([ "toggle", "show", "hide" ], function(_i, name) {
         var cssFn = jQuery.fn[name];
         jQuery.fn[name] = function(speed, easing, callback) {
             return null == speed || "boolean" == typeof speed ? cssFn.apply(this, arguments) : this.animate(genFx(name, !0), speed, easing, callback);
@@ -2334,7 +2407,7 @@
             return value === !1 ? jQuery.removeAttr(elem, name) : elem.setAttribute(name, name), 
             name;
         }
-    }, jQuery.each(jQuery.expr.match.bool.source.match(/\w+/g), function(i, name) {
+    }, jQuery.each(jQuery.expr.match.bool.source.match(/\w+/g), function(_i, name) {
         var getter = attrHandle[name] || jQuery.find.attr;
         attrHandle[name] = function(elem, name, isXML) {
             var ret, handle, lowercaseName = name.toLowerCase();
@@ -2495,7 +2568,7 @@
                     tmp === (elem.ownerDocument || document) && eventPath.push(tmp.defaultView || tmp.parentWindow || window);
                 }
                 for (i = 0; (cur = eventPath[i++]) && !event.isPropagationStopped(); ) lastElement = cur, 
-                event.type = i > 1 ? bubbleType : special.bindType || type, handle = (dataPriv.get(cur, "events") || {})[event.type] && dataPriv.get(cur, "handle"), 
+                event.type = i > 1 ? bubbleType : special.bindType || type, handle = (dataPriv.get(cur, "events") || Object.create(null))[event.type] && dataPriv.get(cur, "handle"), 
                 handle && handle.apply(cur, data), handle = ontype && cur[ontype], handle && handle.apply && acceptData(cur) && (event.result = handle.apply(cur, data), 
                 event.result === !1 && event.preventDefault());
                 return event.type = type, onlyHandlers || event.isDefaultPrevented() || special._default && special._default.apply(eventPath.pop(), data) !== !1 || !acceptData(elem) || ontype && isFunction(elem[type]) && !isWindow(elem) && (tmp = elem[ontype], 
@@ -2530,17 +2603,19 @@
         };
         jQuery.event.special[fix] = {
             setup: function() {
-                var doc = this.ownerDocument || this, attaches = dataPriv.access(doc, fix);
+                var doc = this.ownerDocument || this.document || this, attaches = dataPriv.access(doc, fix);
                 attaches || doc.addEventListener(orig, handler, !0), dataPriv.access(doc, fix, (attaches || 0) + 1);
             },
             teardown: function() {
-                var doc = this.ownerDocument || this, attaches = dataPriv.access(doc, fix) - 1;
+                var doc = this.ownerDocument || this.document || this, attaches = dataPriv.access(doc, fix) - 1;
                 attaches ? dataPriv.access(doc, fix, attaches) : (doc.removeEventListener(orig, handler, !0), 
                 dataPriv.remove(doc, fix));
             }
         };
     });
-    var location = window.location, nonce = Date.now(), rquery = /\?/;
+    var location = window.location, nonce = {
+        guid: Date.now()
+    }, rquery = /\?/;
     jQuery.parseXML = function(data) {
         var xml;
         if (!data || "string" != typeof data) return null;
@@ -2558,6 +2633,7 @@
             var value = isFunction(valueOrFunction) ? valueOrFunction() : valueOrFunction;
             s[s.length] = encodeURIComponent(key) + "=" + encodeURIComponent(null == value ? "" : value);
         };
+        if (null == a) return "";
         if (Array.isArray(a) || a.jquery && !jQuery.isPlainObject(a)) jQuery.each(a, function() {
             add(this.name, this.value);
         }); else for (prefix in a) buildParams(prefix, a[prefix], traditional, add);
@@ -2573,7 +2649,7 @@
             }).filter(function() {
                 var type = this.type;
                 return this.name && !jQuery(this).is(":disabled") && rsubmittable.test(this.nodeName) && !rsubmitterTypes.test(type) && (this.checked || !rcheckableType.test(type));
-            }).map(function(i, elem) {
+            }).map(function(_i, elem) {
                 var val = jQuery(this).val();
                 return null == val ? null : Array.isArray(val) ? jQuery.map(val, function(val) {
                     return {
@@ -2639,6 +2715,7 @@
                 completed || (completed = !0, timeoutTimer && window.clearTimeout(timeoutTimer), 
                 transport = void 0, responseHeadersString = headers || "", jqXHR.readyState = status > 0 ? 4 : 0, 
                 isSuccess = status >= 200 && 300 > status || 304 === status, responses && (response = ajaxHandleResponses(s, jqXHR, responses)), 
+                !isSuccess && jQuery.inArray("script", s.dataTypes) > -1 && (s.converters["text script"] = function() {}), 
                 response = ajaxConvert(s, response, jqXHR, isSuccess), isSuccess ? (s.ifModified && (modified = jqXHR.getResponseHeader("Last-Modified"), 
                 modified && (jQuery.lastModified[cacheURL] = modified), modified = jqXHR.getResponseHeader("etag"), 
                 modified && (jQuery.etag[cacheURL] = modified)), 204 === status || "HEAD" === s.type ? statusText = "nocontent" : 304 === status ? statusText = "notmodified" : (statusText = response.state, 
@@ -2656,10 +2733,10 @@
                 getResponseHeader: function(key) {
                     var match;
                     if (completed) {
-                        if (!responseHeaders) for (responseHeaders = {}; match = rheaders.exec(responseHeadersString); ) responseHeaders[match[1].toLowerCase()] = match[2];
-                        match = responseHeaders[key.toLowerCase()];
+                        if (!responseHeaders) for (responseHeaders = {}; match = rheaders.exec(responseHeadersString); ) responseHeaders[match[1].toLowerCase() + " "] = (responseHeaders[match[1].toLowerCase() + " "] || []).concat(match[2]);
+                        match = responseHeaders[key.toLowerCase() + " "];
                     }
-                    return null == match ? null : match;
+                    return null == match ? null : match.join(", ");
                 },
                 getAllResponseHeaders: function() {
                     return completed ? responseHeadersString : null;
@@ -2698,8 +2775,8 @@
             s.hasContent ? s.data && s.processData && 0 === (s.contentType || "").indexOf("application/x-www-form-urlencoded") && (s.data = s.data.replace(r20, "+")) : (uncached = s.url.slice(cacheURL.length), 
             s.data && (s.processData || "string" == typeof s.data) && (cacheURL += (rquery.test(cacheURL) ? "&" : "?") + s.data, 
             delete s.data), s.cache === !1 && (cacheURL = cacheURL.replace(rantiCache, "$1"), 
-            uncached = (rquery.test(cacheURL) ? "&" : "?") + "_=" + nonce++ + uncached), s.url = cacheURL + uncached), 
-            s.ifModified && (jQuery.lastModified[cacheURL] && jqXHR.setRequestHeader("If-Modified-Since", jQuery.lastModified[cacheURL]), 
+            uncached = (rquery.test(cacheURL) ? "&" : "?") + "_=" + nonce.guid++ + uncached), 
+            s.url = cacheURL + uncached), s.ifModified && (jQuery.lastModified[cacheURL] && jqXHR.setRequestHeader("If-Modified-Since", jQuery.lastModified[cacheURL]), 
             jQuery.etag[cacheURL] && jqXHR.setRequestHeader("If-None-Match", jQuery.etag[cacheURL])), 
             (s.data && s.hasContent && s.contentType !== !1 || options.contentType) && jqXHR.setRequestHeader("Content-Type", s.contentType), 
             jqXHR.setRequestHeader("Accept", s.dataTypes[0] && s.accepts[s.dataTypes[0]] ? s.accepts[s.dataTypes[0]] + ("*" !== s.dataTypes[0] ? ", " + allTypes + "; q=0.01" : "") : s.accepts["*"]);
@@ -2727,7 +2804,7 @@
         getScript: function(url, callback) {
             return jQuery.get(url, void 0, callback, "script");
         }
-    }), jQuery.each([ "get", "post" ], function(i, method) {
+    }), jQuery.each([ "get", "post" ], function(_i, method) {
         jQuery[method] = function(url, data, callback, type) {
             return isFunction(data) && (type = type || callback, callback = data, data = void 0), 
             jQuery.ajax(jQuery.extend({
@@ -2738,7 +2815,10 @@
                 success: callback
             }, jQuery.isPlainObject(url) && url));
         };
-    }), jQuery._evalUrl = function(url) {
+    }), jQuery.ajaxPrefilter(function(s) {
+        var i;
+        for (i in s.headers) "content-type" === i.toLowerCase() && (s.contentType = s.headers[i] || "");
+    }), jQuery._evalUrl = function(url, options, doc) {
         return jQuery.ajax({
             url: url,
             type: "GET",
@@ -2746,7 +2826,12 @@
             cache: !0,
             async: !1,
             global: !1,
-            "throws": !0
+            converters: {
+                "text script": function() {}
+            },
+            dataFilter: function(response) {
+                jQuery.globalEval(response, options, doc);
+            }
         });
     }, jQuery.fn.extend({
         wrapAll: function(html) {
@@ -2842,11 +2927,11 @@
     }), jQuery.ajaxPrefilter("script", function(s) {
         void 0 === s.cache && (s.cache = !1), s.crossDomain && (s.type = "GET");
     }), jQuery.ajaxTransport("script", function(s) {
-        if (s.crossDomain) {
+        if (s.crossDomain || s.scriptAttrs) {
             var script, callback;
             return {
                 send: function(_, complete) {
-                    script = jQuery("<script>").prop({
+                    script = jQuery("<script>").attr(s.scriptAttrs || {}).prop({
                         charset: s.scriptCharset,
                         src: s.url
                     }).on("load error", callback = function(evt) {
@@ -2863,7 +2948,7 @@
     jQuery.ajaxSetup({
         jsonp: "callback",
         jsonpCallback: function() {
-            var callback = oldCallbacks.pop() || jQuery.expando + "_" + nonce++;
+            var callback = oldCallbacks.pop() || jQuery.expando + "_" + nonce.guid++;
             return this[callback] = !0, callback;
         }
     }), jQuery.ajaxPrefilter("json jsonp", function(s, originalSettings, jqXHR) {
@@ -2907,11 +2992,7 @@
                 callback.apply(this, response || [ jqXHR.responseText, status, jqXHR ]);
             });
         }), this;
-    }, jQuery.each([ "ajaxStart", "ajaxStop", "ajaxComplete", "ajaxError", "ajaxSuccess", "ajaxSend" ], function(i, type) {
-        jQuery.fn[type] = function(fn) {
-            return this.on(type, fn);
-        };
-    }), jQuery.expr.pseudos.animated = function(elem) {
+    }, jQuery.expr.pseudos.animated = function(elem) {
         return jQuery.grep(jQuery.timers, function(fn) {
             return elem === fn.elem;
         }).length;
@@ -2924,7 +3005,8 @@
             curLeft = curPosition.left) : (curTop = parseFloat(curCSSTop) || 0, curLeft = parseFloat(curCSSLeft) || 0), 
             isFunction(options) && (options = options.call(elem, i, jQuery.extend({}, curOffset))), 
             null != options.top && (props.top = options.top - curOffset.top + curTop), null != options.left && (props.left = options.left - curOffset.left + curLeft), 
-            "using" in options ? options.using.call(elem, props) : curElem.css(props);
+            "using" in options ? options.using.call(elem, props) : ("number" == typeof props.top && (props.top += "px"), 
+            "number" == typeof props.left && (props.left += "px"), curElem.css(props));
         }
     }, jQuery.fn.extend({
         offset: function(options) {
@@ -2976,7 +3058,7 @@
                 void 0 === val ? win ? win[prop] : elem[method] : void (win ? win.scrollTo(top ? win.pageXOffset : val, top ? val : win.pageYOffset) : elem[method] = val);
             }, method, val, arguments.length);
         };
-    }), jQuery.each([ "top", "left" ], function(i, prop) {
+    }), jQuery.each([ "top", "left" ], function(_i, prop) {
         jQuery.cssHooks[prop] = addGetHookIf(support.pixelPosition, function(elem, computed) {
             return computed ? (computed = curCSS(elem, prop), rnumnonpx.test(computed) ? jQuery(elem).position()[prop] + "px" : computed) : void 0;
         });
@@ -2998,14 +3080,10 @@
                 }, type, chainable ? margin : void 0, chainable);
             };
         });
-    }), jQuery.each("blur focus focusin focusout resize scroll click dblclick mousedown mouseup mousemove mouseover mouseout mouseenter mouseleave change select submit keydown keypress keyup contextmenu".split(" "), function(i, name) {
-        jQuery.fn[name] = function(data, fn) {
-            return arguments.length > 0 ? this.on(name, null, data, fn) : this.trigger(name);
+    }), jQuery.each([ "ajaxStart", "ajaxStop", "ajaxComplete", "ajaxError", "ajaxSuccess", "ajaxSend" ], function(_i, type) {
+        jQuery.fn[type] = function(fn) {
+            return this.on(type, fn);
         };
-    }), jQuery.fn.extend({
-        hover: function(fnOver, fnOut) {
-            return this.mouseenter(fnOver).mouseleave(fnOut || fnOver);
-        }
     }), jQuery.fn.extend({
         bind: function(types, data, fn) {
             return this.on(types, null, data, fn);
@@ -3018,8 +3096,17 @@
         },
         undelegate: function(selector, types, fn) {
             return 1 === arguments.length ? this.off(selector, "**") : this.off(types, selector || "**", fn);
+        },
+        hover: function(fnOver, fnOut) {
+            return this.mouseenter(fnOver).mouseleave(fnOut || fnOver);
         }
-    }), jQuery.proxy = function(fn, context) {
+    }), jQuery.each("blur focus focusin focusout resize scroll click dblclick mousedown mouseup mousemove mouseover mouseout mouseenter mouseleave change select submit keydown keypress keyup contextmenu".split(" "), function(_i, name) {
+        jQuery.fn[name] = function(data, fn) {
+            return arguments.length > 0 ? this.on(name, null, data, fn) : this.trigger(name);
+        };
+    });
+    var rtrim = /^[\s\uFEFF\xA0]+|[\s\uFEFF\xA0]+$/g;
+    jQuery.proxy = function(fn, context) {
         var tmp, args, proxy;
         return "string" == typeof context && (tmp = fn[context], context = fn, fn = tmp), 
         isFunction(fn) ? (args = slice.call(arguments, 2), proxy = function() {
@@ -3032,6 +3119,8 @@
     jQuery.type = toType, jQuery.now = Date.now, jQuery.isNumeric = function(obj) {
         var type = jQuery.type(obj);
         return ("number" === type || "string" === type) && !isNaN(obj - parseFloat(obj));
+    }, jQuery.trim = function(text) {
+        return null == text ? "" : (text + "").replace(rtrim, "");
     }, "function" == typeof define && define.amd && define("jquery", [], function() {
         return jQuery;
     });
@@ -3039,27 +3128,28 @@
     return jQuery.noConflict = function(deep) {
         return window.$ === jQuery && (window.$ = _$), deep && window.jQuery === jQuery && (window.jQuery = _jQuery), 
         jQuery;
-    }, noGlobal || (window.jQuery = window.$ = jQuery), jQuery;
+    }, "undefined" == typeof noGlobal && (window.jQuery = window.$ = jQuery), jQuery;
 }), function(window) {
     "use strict";
     function errorHandlingConfig(config) {
-        return isObject(config) ? void (isDefined(config.objectMaxDepth) && (minErrConfig.objectMaxDepth = isValidObjectMaxDepth(config.objectMaxDepth) ? config.objectMaxDepth : NaN)) : minErrConfig;
+        return isObject(config) ? (isDefined(config.objectMaxDepth) && (minErrConfig.objectMaxDepth = isValidObjectMaxDepth(config.objectMaxDepth) ? config.objectMaxDepth : NaN), 
+        void (isDefined(config.urlErrorParamsEnabled) && isBoolean(config.urlErrorParamsEnabled) && (minErrConfig.urlErrorParamsEnabled = config.urlErrorParamsEnabled))) : minErrConfig;
     }
     function isValidObjectMaxDepth(maxDepth) {
         return isNumber(maxDepth) && maxDepth > 0;
     }
     function minErr(module, ErrorConstructor) {
         ErrorConstructor = ErrorConstructor || Error;
-        var url = "https://errors.angularjs.org/1.6.10/", regex = url.replace(".", "\\.") + "[\\s\\S]*", errRegExp = new RegExp(regex, "g");
+        var url = "https://errors.angularjs.org/1.8.2/", regex = url.replace(".", "\\.") + "[\\s\\S]*", errRegExp = new RegExp(regex, "g");
         return function() {
             var paramPrefix, i, code = arguments[0], template = arguments[1], message = "[" + (module ? module + ":" : "") + code + "] ", templateArgs = sliceArgs(arguments, 2).map(function(arg) {
                 return toDebugString(arg, minErrConfig.objectMaxDepth);
             });
-            for (message += template.replace(/\{\d+\}/g, function(match) {
+            if (message += template.replace(/\{\d+\}/g, function(match) {
                 var index = +match.slice(1, -1);
                 return index < templateArgs.length ? templateArgs[index].replace(errRegExp, "") : match;
-            }), message += "\n" + url + (module ? module + "/" : "") + code, i = 0, paramPrefix = "?"; i < templateArgs.length; i++, 
-            paramPrefix = "&") message += paramPrefix + "p" + i + "=" + encodeURIComponent(templateArgs[i]);
+            }), message += "\n" + url + (module ? module + "/" : "") + code, minErrConfig.urlErrorParamsEnabled) for (i = 0, 
+            paramPrefix = "?"; i < templateArgs.length; i++, paramPrefix = "&") message += paramPrefix + "p" + i + "=" + encodeURIComponent(templateArgs[i]);
             return new ErrorConstructor(message);
         };
     }
@@ -3067,7 +3157,7 @@
         if (null == obj || isWindow(obj)) return !1;
         if (isArray(obj) || isString(obj) || jqLite && obj instanceof jqLite) return !0;
         var length = "length" in Object(obj) && obj.length;
-        return isNumber(length) && (length >= 0 && (length - 1 in obj || obj instanceof Array) || "function" == typeof obj.item);
+        return isNumber(length) && (length >= 0 && length - 1 in obj || "function" == typeof obj.item);
     }
     function forEach(obj, iterator, context) {
         var key, length;
@@ -3097,7 +3187,7 @@
             var obj = objs[i];
             if (isObject(obj) || isFunction(obj)) for (var keys = Object.keys(obj), j = 0, jj = keys.length; jj > j; j++) {
                 var key = keys[j], src = obj[key];
-                deep && isObject(src) ? isDate(src) ? dst[key] = new Date(src.valueOf()) : isRegExp(src) ? dst[key] = new RegExp(src) : src.nodeName ? dst[key] = src.cloneNode(!0) : isElement(src) ? dst[key] = src.clone() : (isObject(dst[key]) || (dst[key] = isArray(src) ? [] : {}), 
+                deep && isObject(src) ? isDate(src) ? dst[key] = new Date(src.valueOf()) : isRegExp(src) ? dst[key] = new RegExp(src) : src.nodeName ? dst[key] = src.cloneNode(!0) : isElement(src) ? dst[key] = src.clone() : "__proto__" !== key && (isObject(dst[key]) || (dst[key] = isArray(src) ? [] : {}), 
                 baseExtend(dst[key], [ src ], !0)) : dst[key] = src;
             }
         }
@@ -3147,6 +3237,9 @@
     }
     function isDate(value) {
         return "[object Date]" === toString.call(value);
+    }
+    function isArray(arr) {
+        return Array.isArray(arr) || arr instanceof Array;
     }
     function isError(value) {
         var tag = toString.call(value);
@@ -3486,12 +3579,15 @@
                 controller: JQLitePrototype.controller,
                 injector: JQLitePrototype.injector,
                 inheritedData: JQLitePrototype.inheritedData
-            }), originalCleanData = jQuery.cleanData, jQuery.cleanData = function(elems) {
-                for (var events, elem, i = 0; null != (elem = elems[i]); i++) events = jQuery._data(elem, "events"), 
-                events && events.$destroy && jQuery(elem).triggerHandler("$destroy");
+            })) : jqLite = JQLite, originalCleanData = jqLite.cleanData, jqLite.cleanData = function(elems) {
+                for (var events, elem, i = 0; null != (elem = elems[i]); i++) events = (jqLite._data(elem) || {}).events, 
+                events && events.$destroy && jqLite(elem).triggerHandler("$destroy");
                 originalCleanData(elems);
-            }) : jqLite = JQLite, angular.element = jqLite, bindJQueryFired = !0;
+            }, angular.element = jqLite, bindJQueryFired = !0;
         }
+    }
+    function UNSAFE_restoreLegacyJqLiteXHTMLReplacement() {
+        JQLite.legacyXHTMLReplacement = !0;
     }
     function assertArg(arg, name, reason) {
         if (!arg) throw ngMinErr("areq", "Argument '{0}' is {1}", name || "?", reason || "required");
@@ -3642,18 +3738,19 @@
             isArray: isArray,
             version: version,
             isDate: isDate,
-            lowercase: lowercase,
-            uppercase: uppercase,
             callbacks: {
                 $$counter: 0
             },
             getTestability: getTestability,
             reloadWithDebugInfo: reloadWithDebugInfo,
+            UNSAFE_restoreLegacyJqLiteXHTMLReplacement: UNSAFE_restoreLegacyJqLiteXHTMLReplacement,
             $$minErr: minErr,
             $$csp: csp,
             $$encodeUriSegment: encodeUriSegment,
             $$encodeUriQuery: encodeUriQuery,
-            $$stringify: stringify
+            $$lowercase: lowercase,
+            $$stringify: stringify,
+            $$uppercase: uppercase
         }), angularModule = setupModuleLoader(window), angularModule("ng", [ "ngLocale" ], [ "$provide", function($provide) {
             $provide.provider({
                 $$sanitizeUri: $$SanitizeUriProvider
@@ -3680,6 +3777,7 @@
                 ngInit: ngInitDirective,
                 ngNonBindable: ngNonBindableDirective,
                 ngPluralize: ngPluralizeDirective,
+                ngRef: ngRefDirective,
                 ngRepeat: ngRepeatDirective,
                 ngShow: ngShowDirective,
                 ngStyle: ngStyleDirective,
@@ -3702,7 +3800,8 @@
                 ngValue: ngValueDirective,
                 ngModelOptions: ngModelOptionsDirective
             }).directive({
-                ngInclude: ngIncludeFillContentDirective
+                ngInclude: ngIncludeFillContentDirective,
+                input: hiddenInputBrowserCacheDirective
             }).directive(ngAttributeAliasDirectives).directive(ngEventDirectives), $provide.provider({
                 $anchorScroll: $AnchorScrollProvider,
                 $animate: $AnimateProvider,
@@ -3721,6 +3820,7 @@
                 $$forceReflow: $$ForceReflowProvider,
                 $interpolate: $InterpolateProvider,
                 $interval: $IntervalProvider,
+                $$intervalFactory: $$IntervalFactoryProvider,
                 $http: $HttpProvider,
                 $httpParamSerializer: $HttpParamSerializerProvider,
                 $httpParamSerializerJQLike: $HttpParamSerializerJQLikeProvider,
@@ -3736,6 +3836,7 @@
                 $sce: $SceProvider,
                 $sceDelegate: $SceDelegateProvider,
                 $sniffer: $SnifferProvider,
+                $$taskTrackerFactory: $$TaskTrackerFactoryProvider,
                 $templateCache: $TemplateCacheProvider,
                 $templateRequest: $TemplateRequestProvider,
                 $$testability: $$TestabilityProvider,
@@ -3747,7 +3848,7 @@
                 $$cookieReader: $$CookieReaderProvider
             });
         } ]).info({
-            angularVersion: "1.6.10"
+            angularVersion: "1.8.2"
         });
     }
     function jqNextId() {
@@ -3774,11 +3875,16 @@
         return !1;
     }
     function jqLiteBuildFragment(html, context) {
-        var tmp, tag, wrap, i, fragment = context.createDocumentFragment(), nodes = [];
+        var tmp, tag, wrap, finalHtml, i, fragment = context.createDocumentFragment(), nodes = [];
         if (jqLiteIsTextNode(html)) nodes.push(context.createTextNode(html)); else {
-            for (tmp = fragment.appendChild(context.createElement("div")), tag = (TAG_NAME_REGEXP.exec(html) || [ "", "" ])[1].toLowerCase(), 
-            wrap = wrapMap[tag] || wrapMap._default, tmp.innerHTML = wrap[1] + html.replace(XHTML_TAG_REGEXP, "<$1></$2>") + wrap[2], 
-            i = wrap[0]; i--; ) tmp = tmp.lastChild;
+            if (tmp = fragment.appendChild(context.createElement("div")), tag = (TAG_NAME_REGEXP.exec(html) || [ "", "" ])[1].toLowerCase(), 
+            finalHtml = JQLite.legacyXHTMLReplacement ? html.replace(XHTML_TAG_REGEXP, "<$1></$2>") : html, 
+            10 > msie) for (wrap = wrapMapIE9[tag] || wrapMapIE9._default, tmp.innerHTML = wrap[1] + finalHtml + wrap[2], 
+            i = wrap[0]; i--; ) tmp = tmp.firstChild; else {
+                for (wrap = wrapMap[tag] || [], i = wrap.length; --i > -1; ) tmp.appendChild(window.document.createElement(wrap[i])), 
+                tmp = tmp.firstChild;
+                tmp.innerHTML = finalHtml;
+            }
             nodes = concat(nodes, tmp.childNodes), tmp = fragment.firstChild, tmp.textContent = "";
         }
         return fragment.textContent = "", fragment.innerHTML = "", forEach(nodes, function(node) {
@@ -3810,28 +3916,38 @@
         !onlyDescendants && jqLiteAcceptsData(element) && jqLite.cleanData([ element ]), 
         element.querySelectorAll && jqLite.cleanData(element.querySelectorAll("*"));
     }
+    function isEmptyObject(obj) {
+        var name;
+        for (name in obj) return !1;
+        return !0;
+    }
+    function removeIfEmptyData(element) {
+        var expandoId = element.ng339, expandoStore = expandoId && jqCache[expandoId], events = expandoStore && expandoStore.events, data = expandoStore && expandoStore.data;
+        data && !isEmptyObject(data) || events && !isEmptyObject(events) || (delete jqCache[expandoId], 
+        element.ng339 = void 0);
+    }
     function jqLiteOff(element, type, fn, unsupported) {
         if (isDefined(unsupported)) throw jqLiteMinErr("offargs", "jqLite#off() does not support the `selector` argument");
         var expandoStore = jqLiteExpandoStore(element), events = expandoStore && expandoStore.events, handle = expandoStore && expandoStore.handle;
-        if (handle) if (type) {
-            var removeHandler = function(type) {
-                var listenerFns = events[type];
-                isDefined(fn) && arrayRemove(listenerFns || [], fn), isDefined(fn) && listenerFns && listenerFns.length > 0 || (element.removeEventListener(type, handle), 
-                delete events[type]);
-            };
-            forEach(type.split(" "), function(type) {
-                removeHandler(type), MOUSE_EVENT_MAP[type] && removeHandler(MOUSE_EVENT_MAP[type]);
-            });
-        } else for (type in events) "$destroy" !== type && element.removeEventListener(type, handle), 
-        delete events[type];
+        if (handle) {
+            if (type) {
+                var removeHandler = function(type) {
+                    var listenerFns = events[type];
+                    isDefined(fn) && arrayRemove(listenerFns || [], fn), isDefined(fn) && listenerFns && listenerFns.length > 0 || (element.removeEventListener(type, handle), 
+                    delete events[type]);
+                };
+                forEach(type.split(" "), function(type) {
+                    removeHandler(type), MOUSE_EVENT_MAP[type] && removeHandler(MOUSE_EVENT_MAP[type]);
+                });
+            } else for (type in events) "$destroy" !== type && element.removeEventListener(type, handle), 
+            delete events[type];
+            removeIfEmptyData(element);
+        }
     }
     function jqLiteRemoveData(element, name) {
         var expandoId = element.ng339, expandoStore = expandoId && jqCache[expandoId];
-        if (expandoStore) {
-            if (name) return void delete expandoStore.data[name];
-            expandoStore.handle && (expandoStore.events.$destroy && expandoStore.handle({}, "$destroy"), 
-            jqLiteOff(element)), delete jqCache[expandoId], element.ng339 = void 0;
-        }
+        expandoStore && (name ? delete expandoStore.data[name] : expandoStore.data = {}, 
+        removeIfEmptyData(element));
     }
     function jqLiteExpandoStore(element, createIfNecessary) {
         var expandoId = element.ng339, expandoStore = expandoId && jqCache[expandoId];
@@ -4091,7 +4207,7 @@
             function isClass(func) {
                 if (msie || "function" != typeof func) return !1;
                 var result = func.$$ngIsClass;
-                return isBoolean(result) || (result = func.$$ngIsClass = /^(?:class\b|constructor\()/.test(stringifyFn(func))), 
+                return isBoolean(result) || (result = func.$$ngIsClass = /^class\b/.test(stringifyFn(func))), 
                 result;
             }
             function invoke(fn, self, locals, serviceName) {
@@ -4207,22 +4323,14 @@
     function prepareAnimateOptions(options) {
         return isObject(options) ? options : {};
     }
-    function Browser(window, document, $log, $sniffer) {
-        function completeOutstandingRequest(fn) {
-            try {
-                fn.apply(null, sliceArgs(arguments, 1));
-            } finally {
-                if (outstandingRequestCount--, 0 === outstandingRequestCount) for (;outstandingRequestCallbacks.length; ) try {
-                    outstandingRequestCallbacks.pop()();
-                } catch (e) {
-                    $log.error(e);
-                }
-            }
-        }
-        function getHash(url) {
-            var index = url.indexOf("#");
-            return -1 === index ? "" : url.substr(index);
-        }
+    function getHash(url) {
+        var index = url.indexOf("#");
+        return -1 === index ? "" : url.substr(index);
+    }
+    function trimEmptyHash(url) {
+        return url.replace(/#$/, "");
+    }
+    function Browser(window, document, $log, $sniffer, $$taskTrackerFactory) {
         function cacheStateAndFireUrlChange() {
             pendingLocation = null, fireStateOrUrlChange();
         }
@@ -4238,14 +4346,9 @@
                 listener(self.url(), cachedState);
             }));
         }
-        var self = this, location = window.location, history = window.history, setTimeout = window.setTimeout, clearTimeout = window.clearTimeout, pendingDeferIds = {};
-        self.isMock = !1;
-        var outstandingRequestCount = 0, outstandingRequestCallbacks = [];
-        self.$$completeOutstandingRequest = completeOutstandingRequest, self.$$incOutstandingRequestCount = function() {
-            outstandingRequestCount++;
-        }, self.notifyWhenNoOutstandingRequests = function(callback) {
-            0 === outstandingRequestCount ? callback() : outstandingRequestCallbacks.push(callback);
-        };
+        var self = this, location = window.location, history = window.history, setTimeout = window.setTimeout, clearTimeout = window.clearTimeout, pendingDeferIds = {}, taskTracker = $$taskTrackerFactory($log);
+        self.isMock = !1, self.$$completeOutstandingRequest = taskTracker.completeTask, 
+        self.$$incOutstandingRequestCount = taskTracker.incTaskCount, self.notifyWhenNoOutstandingRequests = taskTracker.notifyWhenNoPendingTasks;
         var cachedState, lastHistoryState, lastBrowserUrl = location.href, baseElement = document.find("base"), pendingLocation = null, getCurrentState = $sniffer.history ? function() {
             try {
                 return history.state;
@@ -4255,14 +4358,14 @@
             if (isUndefined(state) && (state = null), location !== window.location && (location = window.location), 
             history !== window.history && (history = window.history), url) {
                 var sameState = lastHistoryState === state;
-                if (lastBrowserUrl === url && (!$sniffer.history || sameState)) return self;
+                if (url = urlResolve(url).href, lastBrowserUrl === url && (!$sniffer.history || sameState)) return self;
                 var sameBase = lastBrowserUrl && stripHash(lastBrowserUrl) === stripHash(url);
                 return lastBrowserUrl = url, lastHistoryState = state, !$sniffer.history || sameBase && sameState ? (sameBase || (pendingLocation = url), 
                 replace ? location.replace(url) : sameBase ? location.hash = getHash(url) : location.href = url, 
                 location.href !== url && (pendingLocation = url)) : (history[replace ? "replaceState" : "pushState"](state, "", url), 
                 cacheState()), pendingLocation && (pendingLocation = url), self;
             }
-            return pendingLocation || location.href.replace(/%27/g, "'");
+            return trimEmptyHash(pendingLocation || location.href);
         }, self.state = function() {
             return cachedState;
         };
@@ -4276,19 +4379,24 @@
         }, self.$$checkUrlChange = fireStateOrUrlChange, self.baseHref = function() {
             var href = baseElement.attr("href");
             return href ? href.replace(/^(https?:)?\/\/[^\/]*/, "") : "";
-        }, self.defer = function(fn, delay) {
+        }, self.defer = function(fn, delay, taskType) {
             var timeoutId;
-            return outstandingRequestCount++, timeoutId = setTimeout(function() {
-                delete pendingDeferIds[timeoutId], completeOutstandingRequest(fn);
-            }, delay || 0), pendingDeferIds[timeoutId] = !0, timeoutId;
+            return delay = delay || 0, taskType = taskType || taskTracker.DEFAULT_TASK_TYPE, 
+            taskTracker.incTaskCount(taskType), timeoutId = setTimeout(function() {
+                delete pendingDeferIds[timeoutId], taskTracker.completeTask(fn, taskType);
+            }, delay), pendingDeferIds[timeoutId] = taskType, timeoutId;
         }, self.defer.cancel = function(deferId) {
-            return pendingDeferIds[deferId] ? (delete pendingDeferIds[deferId], clearTimeout(deferId), 
-            completeOutstandingRequest(noop), !0) : !1;
+            if (pendingDeferIds.hasOwnProperty(deferId)) {
+                var taskType = pendingDeferIds[deferId];
+                return delete pendingDeferIds[deferId], clearTimeout(deferId), taskTracker.completeTask(noop, taskType), 
+                !0;
+            }
+            return !1;
         };
     }
     function $BrowserProvider() {
-        this.$get = [ "$window", "$log", "$sniffer", "$document", function($window, $log, $sniffer, $document) {
-            return new Browser($window, $document, $log, $sniffer);
+        this.$get = [ "$window", "$log", "$sniffer", "$document", "$$taskTrackerFactory", function($window, $log, $sniffer, $document, $$taskTrackerFactory) {
+            return new Browser($window, $document, $log, $sniffer, $$taskTrackerFactory);
         } ];
     }
     function $CacheFactoryProvider() {
@@ -4367,7 +4475,7 @@
     function UNINITIALIZED_VALUE() {}
     function $CompileProvider($provide, $$sanitizeUriProvider) {
         function parseIsolateBindings(scope, directiveName, isController) {
-            var LOCAL_REGEXP = /^([@&<]|=(\*?))(\??)\s*([\w$]*)$/, bindings = createMap();
+            var LOCAL_REGEXP = /^([@&]|[=<](\*?))(\??)\s*([\w$]*)$/, bindings = createMap();
             return forEach(scope, function(definition, scopeName) {
                 if (definition = definition.trim(), definition in bindingCache) return void (bindings[scopeName] = bindingCache[definition]);
                 var match = definition.match(LOCAL_REGEXP);
@@ -4459,20 +4567,30 @@
             return forEach(options, function(val, key) {
                 "$" === key.charAt(0) && (factory[key] = val, isFunction(controller) && (controller[key] = val));
             }), factory.$inject = [ "$injector" ], this.directive(name, factory);
-        }, this.aHrefSanitizationWhitelist = function(regexp) {
-            return isDefined(regexp) ? ($$sanitizeUriProvider.aHrefSanitizationWhitelist(regexp), 
-            this) : $$sanitizeUriProvider.aHrefSanitizationWhitelist();
-        }, this.imgSrcSanitizationWhitelist = function(regexp) {
-            return isDefined(regexp) ? ($$sanitizeUriProvider.imgSrcSanitizationWhitelist(regexp), 
-            this) : $$sanitizeUriProvider.imgSrcSanitizationWhitelist();
-        };
+        }, this.aHrefSanitizationTrustedUrlList = function(regexp) {
+            return isDefined(regexp) ? ($$sanitizeUriProvider.aHrefSanitizationTrustedUrlList(regexp), 
+            this) : $$sanitizeUriProvider.aHrefSanitizationTrustedUrlList();
+        }, Object.defineProperty(this, "aHrefSanitizationWhitelist", {
+            get: function() {
+                return this.aHrefSanitizationTrustedUrlList;
+            },
+            set: function(value) {
+                this.aHrefSanitizationTrustedUrlList = value;
+            }
+        }), this.imgSrcSanitizationTrustedUrlList = function(regexp) {
+            return isDefined(regexp) ? ($$sanitizeUriProvider.imgSrcSanitizationTrustedUrlList(regexp), 
+            this) : $$sanitizeUriProvider.imgSrcSanitizationTrustedUrlList();
+        }, Object.defineProperty(this, "imgSrcSanitizationWhitelist", {
+            get: function() {
+                return this.imgSrcSanitizationTrustedUrlList;
+            },
+            set: function(value) {
+                this.imgSrcSanitizationTrustedUrlList = value;
+            }
+        });
         var debugInfoEnabled = !0;
         this.debugInfoEnabled = function(enabled) {
             return isDefined(enabled) ? (debugInfoEnabled = enabled, this) : debugInfoEnabled;
-        };
-        var preAssignBindingsEnabled = !1;
-        this.preAssignBindingsEnabled = function(enabled) {
-            return isDefined(enabled) ? (preAssignBindingsEnabled = enabled, this) : preAssignBindingsEnabled;
         };
         var strictComponentBindingsEnabled = !1;
         this.strictComponentBindingsEnabled = function(enabled) {
@@ -4489,7 +4607,23 @@
         var cssClassDirectivesEnabledConfig = !0;
         this.cssClassDirectivesEnabled = function(value) {
             return arguments.length ? (cssClassDirectivesEnabledConfig = value, this) : cssClassDirectivesEnabledConfig;
-        }, this.$get = [ "$injector", "$interpolate", "$exceptionHandler", "$templateRequest", "$parse", "$controller", "$rootScope", "$sce", "$animate", "$$sanitizeUri", function($injector, $interpolate, $exceptionHandler, $templateRequest, $parse, $controller, $rootScope, $sce, $animate, $$sanitizeUri) {
+        };
+        var PROP_CONTEXTS = createMap();
+        this.addPropertySecurityContext = function(elementName, propertyName, ctx) {
+            var key = elementName.toLowerCase() + "|" + propertyName.toLowerCase();
+            if (key in PROP_CONTEXTS && PROP_CONTEXTS[key] !== ctx) throw $compileMinErr("ctxoverride", "Property context '{0}.{1}' already set to '{2}', cannot override to '{3}'.", elementName, propertyName, PROP_CONTEXTS[key], ctx);
+            return PROP_CONTEXTS[key] = ctx, this;
+        }, function() {
+            function registerContext(ctx, values) {
+                forEach(values, function(v) {
+                    PROP_CONTEXTS[v.toLowerCase()] = ctx;
+                });
+            }
+            registerContext(SCE_CONTEXTS.HTML, [ "iframe|srcdoc", "*|innerHTML", "*|outerHTML" ]), 
+            registerContext(SCE_CONTEXTS.CSS, [ "*|style" ]), registerContext(SCE_CONTEXTS.URL, [ "area|href", "area|ping", "a|href", "a|ping", "blockquote|cite", "body|background", "del|cite", "input|src", "ins|cite", "q|cite" ]), 
+            registerContext(SCE_CONTEXTS.MEDIA_URL, [ "audio|src", "img|src", "img|srcset", "source|src", "source|srcset", "track|src", "video|src", "video|poster" ]), 
+            registerContext(SCE_CONTEXTS.RESOURCE_URL, [ "*|formAction", "applet|code", "applet|codebase", "base|href", "embed|src", "frame|src", "form|action", "head|profile", "html|manifest", "iframe|src", "link|href", "media|src", "object|codebase", "object|data", "script|src" ]);
+        }(), this.$get = [ "$injector", "$interpolate", "$exceptionHandler", "$templateRequest", "$parse", "$controller", "$rootScope", "$sce", "$animate", function($injector, $interpolate, $exceptionHandler, $templateRequest, $parse, $controller, $rootScope, $sce, $animate) {
             function flushOnChangesQueue() {
                 try {
                     if (!--onChangesTtl) throw onChangesQueue = void 0, $compileMinErr("infchng", "{0} $onChanges() iterations reached. Aborting!\n", TTL);
@@ -4504,6 +4638,17 @@
                 } finally {
                     onChangesTtl++;
                 }
+            }
+            function sanitizeSrcset(value, invokeType) {
+                if (!value) return value;
+                if (!isString(value)) throw $compileMinErr("srcset", 'Can\'t pass trusted values to `{0}`: "{1}"', invokeType, value.toString());
+                for (var result = "", trimmedSrcset = trim(value), srcPattern = /(\s+\d+x\s*,|\s+\d+w\s*,|\s+,|,\s+)/, pattern = /\s/.test(trimmedSrcset) ? srcPattern : /(,)/, rawUris = trimmedSrcset.split(pattern), nbrUrisWith2parts = Math.floor(rawUris.length / 2), i = 0; nbrUrisWith2parts > i; i++) {
+                    var innerIdx = 2 * i;
+                    result += $sce.getTrustedMediaUrl(trim(rawUris[innerIdx])), result += " " + trim(rawUris[innerIdx + 1]);
+                }
+                var lastTuple = trim(rawUris[2 * i]).split(/\s/);
+                return result += $sce.getTrustedMediaUrl(trim(lastTuple[0])), 2 === lastTuple.length && (result += " " + trim(lastTuple[1])), 
+                result;
             }
             function Attributes(element, attributesToCopy) {
                 if (attributesToCopy) {
@@ -4593,18 +4738,18 @@
                 switch (nodeType) {
                   case NODE_TYPE_ELEMENT:
                     nodeName = nodeName_(node), addDirective(directives, directiveNormalize(nodeName), "E", maxPriority, ignoreDirective);
-                    for (var attr, name, nName, ngAttrName, value, isNgAttr, nAttrs = node.attributes, j = 0, jj = nAttrs && nAttrs.length; jj > j; j++) {
-                        var attrStartName = !1, attrEndName = !1;
-                        attr = nAttrs[j], name = attr.name, value = attr.value, ngAttrName = directiveNormalize(name), 
-                        isNgAttr = NG_ATTR_BINDING.test(ngAttrName), isNgAttr && (name = name.replace(PREFIX_REGEXP, "").substr(8).replace(/_(.)/g, function(match, letter) {
+                    for (var attr, name, nName, value, ngPrefixMatch, nAttrs = node.attributes, j = 0, jj = nAttrs && nAttrs.length; jj > j; j++) {
+                        var multiElementMatch, attrStartName = !1, attrEndName = !1, isNgAttr = !1, isNgProp = !1, isNgEvent = !1;
+                        attr = nAttrs[j], name = attr.name, value = attr.value, nName = directiveNormalize(name.toLowerCase()), 
+                        (ngPrefixMatch = nName.match(NG_PREFIX_BINDING)) ? (isNgAttr = "Attr" === ngPrefixMatch[1], 
+                        isNgProp = "Prop" === ngPrefixMatch[1], isNgEvent = "On" === ngPrefixMatch[1], name = name.replace(PREFIX_REGEXP, "").toLowerCase().substr(4 + ngPrefixMatch[1].length).replace(/_(.)/g, function(match, letter) {
                             return letter.toUpperCase();
-                        }));
-                        var multiElementMatch = ngAttrName.match(MULTI_ELEMENT_DIR_RE);
-                        multiElementMatch && directiveIsMultiElement(multiElementMatch[1]) && (attrStartName = name, 
+                        })) : (multiElementMatch = nName.match(MULTI_ELEMENT_DIR_RE)) && directiveIsMultiElement(multiElementMatch[1]) && (attrStartName = name, 
                         attrEndName = name.substr(0, name.length - 5) + "end", name = name.substr(0, name.length - 6)), 
-                        nName = directiveNormalize(name.toLowerCase()), attrsMap[nName] = name, (isNgAttr || !attrs.hasOwnProperty(nName)) && (attrs[nName] = value, 
+                        isNgProp || isNgEvent ? (attrs[nName] = value, attrsMap[nName] = attr.name, isNgProp ? addPropertyDirective(node, directives, nName, name) : addEventDirective(directives, nName, name)) : (nName = directiveNormalize(name.toLowerCase()), 
+                        attrsMap[nName] = name, (isNgAttr || !attrs.hasOwnProperty(nName)) && (attrs[nName] = value, 
                         getBooleanAttrName(node, nName) && (attrs[nName] = !0)), addAttrInterpolateDirective(node, directives, value, nName, isNgAttr), 
-                        addDirective(directives, nName, "A", maxPriority, ignoreDirective, attrStartName, attrEndName);
+                        addDirective(directives, nName, "A", maxPriority, ignoreDirective, attrStartName, attrEndName));
                     }
                     if ("input" === nodeName && "hidden" === node.getAttribute("type") && node.setAttribute("autocomplete", "off"), 
                     !cssClassDirectivesEnabled) break;
@@ -4690,14 +4835,7 @@
                     scopeBindingInfo.removeWatches && isolateScope.$on("$destroy", scopeBindingInfo.removeWatches));
                     for (var name in elementControllers) {
                         var controllerDirective = controllerDirectives[name], controller = elementControllers[name], bindings = controllerDirective.$$bindings.bindToController;
-                        if (preAssignBindingsEnabled) {
-                            bindings ? controller.bindingInfo = initializeDirectiveBindings(controllerScope, attrs, controller.instance, bindings, controllerDirective) : controller.bindingInfo = {};
-                            var controllerResult = controller();
-                            controllerResult !== controller.instance && (controller.instance = controllerResult, 
-                            $element.data("$" + controllerDirective.name + "Controller", controllerResult), 
-                            controller.bindingInfo.removeWatches && controller.bindingInfo.removeWatches(), 
-                            controller.bindingInfo = initializeDirectiveBindings(controllerScope, attrs, controller.instance, bindings, controllerDirective));
-                        } else controller.instance = controller(), $element.data("$" + controllerDirective.name + "Controller", controller.instance), 
+                        controller.instance = controller(), $element.data("$" + controllerDirective.name + "Controller", controller.instance), 
                         controller.bindingInfo = initializeDirectiveBindings(controllerScope, attrs, controller.instance, bindings, controllerDirective);
                     }
                     for (forEach(controllerDirectives, function(controllerDirective, name) {
@@ -4753,12 +4891,12 @@
                     nonTlbTranscludeDirective = directive), "element" === directiveValue) hasElementTranscludeDirective = !0, 
                     terminalPriority = directive.priority, $template = $compileNode, $compileNode = templateAttrs.$$element = jqLite(compile.$$createComment(directiveName, templateAttrs[directiveName])), 
                     compileNode = $compileNode[0], replaceWith(jqCollection, sliceArgs($template), compileNode), 
-                    $template[0].$$parentNode = $template[0].parentNode, childTranscludeFn = compilationGenerator(mightHaveMultipleTransclusionError, $template, transcludeFn, terminalPriority, replaceDirective && replaceDirective.name, {
+                    childTranscludeFn = compilationGenerator(mightHaveMultipleTransclusionError, $template, transcludeFn, terminalPriority, replaceDirective && replaceDirective.name, {
                         nonTlbTranscludeDirective: nonTlbTranscludeDirective
                     }); else {
                         var slots = createMap();
                         if (isObject(directiveValue)) {
-                            $template = [];
+                            $template = window.document.createDocumentFragment();
                             var slotMap = createMap(), filledSlots = createMap();
                             forEach(directiveValue, function(elementSelector, slotName) {
                                 var optional = "?" === elementSelector.charAt(0);
@@ -4766,12 +4904,16 @@
                                 slots[slotName] = null, filledSlots[slotName] = optional;
                             }), forEach($compileNode.contents(), function(node) {
                                 var slotName = slotMap[directiveNormalize(nodeName_(node))];
-                                slotName ? (filledSlots[slotName] = !0, slots[slotName] = slots[slotName] || [], 
-                                slots[slotName].push(node)) : $template.push(node);
+                                slotName ? (filledSlots[slotName] = !0, slots[slotName] = slots[slotName] || window.document.createDocumentFragment(), 
+                                slots[slotName].appendChild(node)) : $template.appendChild(node);
                             }), forEach(filledSlots, function(filled, slotName) {
                                 if (!filled) throw $compileMinErr("reqslot", "Required transclusion slot `{0}` was not filled.", slotName);
                             });
-                            for (var slotName in slots) slots[slotName] && (slots[slotName] = compilationGenerator(mightHaveMultipleTransclusionError, slots[slotName], transcludeFn));
+                            for (var slotName in slots) if (slots[slotName]) {
+                                var slotCompileNodes = jqLite(slots[slotName].childNodes);
+                                slots[slotName] = compilationGenerator(mightHaveMultipleTransclusionError, slotCompileNodes, transcludeFn);
+                            }
+                            $template = jqLite($template.childNodes);
                         } else $template = jqLite(jqLiteClone(compileNode)).contents();
                         $compileNode.empty(), childTranscludeFn = compilationGenerator(mightHaveMultipleTransclusionError, $template, transcludeFn, void 0, void 0, {
                             needsNewScope: directive.$$isolateScope || directive.$$newScope
@@ -4819,7 +4961,7 @@
                     if ("^^" === inheritType ? $element = $element.parent() : (value = elementControllers && elementControllers[name], 
                     value = value && value.instance), !value) {
                         var dataName = "$" + name + "Controller";
-                        value = inheritType ? $element.inheritedData(dataName) : $element.data(dataName);
+                        value = "^^" === inheritType && $element[0] && $element[0].nodeType === NODE_TYPE_DOCUMENT ? null : inheritType ? $element.inheritedData(dataName) : $element.data(dataName);
                     }
                     if (!value && !optional) throw $compileMinErr("ctreq", "Controller '{0}', required by directive '{1}', can't be found!", name, directiveName);
                 } else if (isArray(require)) {
@@ -4961,18 +5103,46 @@
                     return template;
                 }
             }
-            function getTrustedContext(node, attrNormalizedName) {
-                if ("srcdoc" === attrNormalizedName) return $sce.HTML;
-                var tag = nodeName_(node);
-                if ("src" === attrNormalizedName || "ngSrc" === attrNormalizedName) {
-                    if (-1 === [ "img", "video", "audio", "source", "track" ].indexOf(tag)) return $sce.RESOURCE_URL;
-                } else if ("xlinkHref" === attrNormalizedName || "form" === tag && "action" === attrNormalizedName || "link" === tag && "href" === attrNormalizedName) return $sce.RESOURCE_URL;
+            function getTrustedAttrContext(nodeName, attrNormalizedName) {
+                return "srcdoc" === attrNormalizedName ? $sce.HTML : "src" === attrNormalizedName || "ngSrc" === attrNormalizedName ? -1 === [ "img", "video", "audio", "source", "track" ].indexOf(nodeName) ? $sce.RESOURCE_URL : $sce.MEDIA_URL : "xlinkHref" === attrNormalizedName ? "image" === nodeName ? $sce.MEDIA_URL : "a" === nodeName ? $sce.URL : $sce.RESOURCE_URL : "form" === nodeName && "action" === attrNormalizedName || "base" === nodeName && "href" === attrNormalizedName || "link" === nodeName && "href" === attrNormalizedName ? $sce.RESOURCE_URL : "a" !== nodeName || "href" !== attrNormalizedName && "ngHref" !== attrNormalizedName ? void 0 : $sce.URL;
+            }
+            function getTrustedPropContext(nodeName, propNormalizedName) {
+                var prop = propNormalizedName.toLowerCase();
+                return PROP_CONTEXTS[nodeName + "|" + prop] || PROP_CONTEXTS["*|" + prop];
+            }
+            function sanitizeSrcsetPropertyValue(value) {
+                return sanitizeSrcset($sce.valueOf(value), "ng-prop-srcset");
+            }
+            function addPropertyDirective(node, directives, attrName, propName) {
+                if (EVENT_HANDLER_ATTR_REGEXP.test(propName)) throw $compileMinErr("nodomevents", "Property bindings for HTML DOM event properties are disallowed");
+                var nodeName = nodeName_(node), trustedContext = getTrustedPropContext(nodeName, propName), sanitizer = identity;
+                "srcset" !== propName || "img" !== nodeName && "source" !== nodeName ? trustedContext && (sanitizer = $sce.getTrusted.bind($sce, trustedContext)) : sanitizer = sanitizeSrcsetPropertyValue, 
+                directives.push({
+                    priority: 100,
+                    compile: function(_, attr) {
+                        var ngPropGetter = $parse(attr[attrName]), ngPropWatch = $parse(attr[attrName], function(val) {
+                            return $sce.valueOf(val);
+                        });
+                        return {
+                            pre: function(scope, $element) {
+                                function applyPropValue() {
+                                    var propValue = ngPropGetter(scope);
+                                    $element[0][propName] = sanitizer(propValue);
+                                }
+                                applyPropValue(), scope.$watch(ngPropWatch, applyPropValue);
+                            }
+                        };
+                    }
+                });
+            }
+            function addEventDirective(directives, attrName, eventName) {
+                directives.push(createEventDirective($parse, $rootScope, $exceptionHandler, attrName, eventName, !1));
             }
             function addAttrInterpolateDirective(node, directives, value, name, isNgAttr) {
-                var trustedContext = getTrustedContext(node, name), mustHaveExpression = !isNgAttr, allOrNothing = ALL_OR_NOTHING_ATTRS[name] || isNgAttr, interpolateFn = $interpolate(value, mustHaveExpression, trustedContext, allOrNothing);
+                var nodeName = nodeName_(node), trustedContext = getTrustedAttrContext(nodeName, name), mustHaveExpression = !isNgAttr, allOrNothing = ALL_OR_NOTHING_ATTRS[name] || isNgAttr, interpolateFn = $interpolate(value, mustHaveExpression, trustedContext, allOrNothing);
                 if (interpolateFn) {
-                    if ("multiple" === name && "select" === nodeName_(node)) throw $compileMinErr("selmulti", "Binding to the 'multiple' attribute is not supported. Element: {0}", startingTag(node));
-                    if (EVENT_HANDLER_ATTR_REGEXP.test(name)) throw $compileMinErr("nodomevents", "Interpolations for HTML DOM event attributes are disallowed.  Please use the ng- versions (such as ng-click instead of onclick) instead.");
+                    if ("multiple" === name && "select" === nodeName) throw $compileMinErr("selmulti", "Binding to the 'multiple' attribute is not supported. Element: {0}", startingTag(node));
+                    if (EVENT_HANDLER_ATTR_REGEXP.test(name)) throw $compileMinErr("nodomevents", "Interpolations for HTML DOM event attributes are disallowed");
                     directives.push({
                         priority: 100,
                         compile: function() {
@@ -5072,15 +5242,15 @@
                         }
                         if (optional && !attrs[attrName]) break;
                         parentGet = $parse(attrs[attrName]);
-                        var deepWatch = parentGet.literal, initialValue = destination[scopeName] = parentGet(scope);
+                        var isLiteral = parentGet.literal, initialValue = destination[scopeName] = parentGet(scope);
                         initialChanges[scopeName] = new SimpleChange(_UNINITIALIZED_VALUE, destination[scopeName]), 
-                        removeWatch = scope.$watch(parentGet, function(newValue, oldValue) {
+                        removeWatch = scope[definition.collection ? "$watchCollection" : "$watch"](parentGet, function(newValue, oldValue) {
                             if (oldValue === newValue) {
-                                if (oldValue === initialValue || deepWatch && equals(oldValue, initialValue)) return;
+                                if (oldValue === initialValue || isLiteral && equals(oldValue, initialValue)) return;
                                 oldValue = initialValue;
                             }
                             recordChanges(scopeName, newValue, oldValue), destination[scopeName] = newValue;
-                        }, deepWatch), removeWatchCollection.push(removeWatch);
+                        }), removeWatchCollection.push(removeWatch);
                         break;
 
                       case "&":
@@ -5114,19 +5284,11 @@
                 },
                 $set: function(key, value, writeAttr, attrName) {
                     var nodeName, node = this.$$element[0], booleanKey = getBooleanAttrName(node, key), aliasedKey = getAliasedAttrName(key), observer = key;
-                    if (booleanKey ? (this.$$element.prop(key, value), attrName = booleanKey) : aliasedKey && (this[aliasedKey] = value, 
+                    booleanKey ? (this.$$element.prop(key, value), attrName = booleanKey) : aliasedKey && (this[aliasedKey] = value, 
                     observer = aliasedKey), this[key] = value, attrName ? this.$attr[key] = attrName : (attrName = this.$attr[key], 
                     attrName || (this.$attr[key] = attrName = snake_case(key, "-"))), nodeName = nodeName_(this.$$element), 
-                    "a" === nodeName && ("href" === key || "xlinkHref" === key) || "img" === nodeName && "src" === key) this[key] = value = null == value ? value : $$sanitizeUri(value, "src" === key); else if ("img" === nodeName && "srcset" === key && isDefined(value)) {
-                        for (var result = "", trimmedSrcset = trim(value), srcPattern = /(\s+\d+x\s*,|\s+\d+w\s*,|\s+,|,\s+)/, pattern = /\s/.test(trimmedSrcset) ? srcPattern : /(,)/, rawUris = trimmedSrcset.split(pattern), nbrUrisWith2parts = Math.floor(rawUris.length / 2), i = 0; nbrUrisWith2parts > i; i++) {
-                            var innerIdx = 2 * i;
-                            result += $$sanitizeUri(trim(rawUris[innerIdx]), !0), result += " " + trim(rawUris[innerIdx + 1]);
-                        }
-                        var lastTuple = trim(rawUris[2 * i]).split(/\s/);
-                        result += $$sanitizeUri(trim(lastTuple[0]), !0), 2 === lastTuple.length && (result += " " + trim(lastTuple[1])), 
-                        this[key] = value = result;
-                    }
-                    writeAttr !== !1 && (null == value ? this.$$element.removeAttr(attrName) : SIMPLE_ATTR_NAME.test(attrName) ? this.$$element.attr(attrName, value) : setSpecialAttr(this.$$element[0], attrName, value));
+                    "img" === nodeName && "srcset" === key && (this[key] = value = sanitizeSrcset(value, "$set('srcset', value)")), 
+                    writeAttr !== !1 && (null === value || isUndefined(value) ? this.$$element.removeAttr(attrName) : SIMPLE_ATTR_NAME.test(attrName) ? booleanKey && value === !1 ? this.$$element.removeAttr(attrName) : this.$$element.attr(attrName, value) : setSpecialAttr(this.$$element[0], attrName, value));
                     var $$observers = this.$$observers;
                     $$observers && forEach($$observers[observer], function(fn) {
                         try {
@@ -5147,7 +5309,7 @@
             };
             var startSymbol = $interpolate.startSymbol(), endSymbol = $interpolate.endSymbol(), denormalizeTemplate = "{{" === startSymbol && "}}" === endSymbol ? identity : function(template) {
                 return template.replace(/\{\{/g, startSymbol).replace(/}}/g, endSymbol);
-            }, NG_ATTR_BINDING = /^ngAttr[A-Z]/, MULTI_ELEMENT_DIR_RE = /^(.+)Start$/;
+            }, NG_PREFIX_BINDING = /^ng(Attr|Prop|On)([A-Z].*)$/, MULTI_ELEMENT_DIR_RE = /^(.+)Start$/;
             return compile.$$addBindingInfo = debugInfoEnabled ? function($element, binding) {
                 var bindings = $element.data("$binding") || [];
                 isArray(binding) ? bindings = bindings.concat(binding) : bindings.push(binding), 
@@ -5200,14 +5362,12 @@
         }
     }
     function $ControllerProvider() {
-        var controllers = {}, globals = !1;
+        var controllers = {};
         this.has = function(name) {
             return controllers.hasOwnProperty(name);
         }, this.register = function(name, constructor) {
             assertNotHasOwnProperty(name, "controller"), isObject(name) ? extend(controllers, name) : controllers[name] = constructor;
-        }, this.allowGlobals = function() {
-            globals = !0;
-        }, this.$get = [ "$injector", "$window", function($injector, $window) {
+        }, this.$get = [ "$injector", function($injector) {
             function addIdentifier(locals, identifier, instance, name) {
                 if (!locals || !isObject(locals.$scope)) throw minErr("$controller")("noscp", "Cannot export controller '{0}' as '{1}'! No $scope object provided via `locals`.", name, identifier);
                 locals.$scope[identifier] = instance;
@@ -5216,7 +5376,7 @@
                 var instance, match, constructor, identifier;
                 if (later = later === !0, ident && isString(ident) && (identifier = ident), isString(expression)) {
                     if (match = expression.match(CNTRL_REG), !match) throw $controllerMinErr("ctrlfmt", "Badly formed controller string '{0}'. Must match `__name__ as __id__` or `__name__`.", expression);
-                    if (constructor = match[1], identifier = identifier || match[3], expression = controllers.hasOwnProperty(constructor) ? controllers[constructor] : getter(locals.$scope, constructor, !0) || (globals ? getter($window, constructor, !0) : void 0), 
+                    if (constructor = match[1], identifier = identifier || match[3], expression = controllers.hasOwnProperty(constructor) ? controllers[constructor] : getter(locals.$scope, constructor, !0), 
                     !expression) throw $controllerMinErr("ctrlreg", "The controller with the name '{0}' is not registered.", constructor);
                     assertArgFn(expression, constructor, !0);
                 }
@@ -5283,11 +5443,11 @@
         this.$get = function() {
             return function(params) {
                 function serialize(toSerialize, prefix, topLevel) {
-                    null === toSerialize || isUndefined(toSerialize) || (isArray(toSerialize) ? forEach(toSerialize, function(value, index) {
+                    isArray(toSerialize) ? forEach(toSerialize, function(value, index) {
                         serialize(value, prefix + "[" + (isObject(value) ? index : "") + "]");
                     }) : isObject(toSerialize) && !isDate(toSerialize) ? forEachSorted(toSerialize, function(value, key) {
                         serialize(value, prefix + (topLevel ? "" : "[") + key + (topLevel ? "" : "]"));
-                    }) : parts.push(encodeUriQuery(prefix) + "=" + encodeUriQuery(serializeValue(toSerialize))));
+                    }) : (isFunction(toSerialize) && (toSerialize = toSerialize()), parts.push(encodeUriQuery(prefix) + "=" + (null == toSerialize ? "" : encodeUriQuery(serializeValue(toSerialize)))));
                 }
                 if (!params) return "";
                 var parts = [];
@@ -5365,8 +5525,15 @@
         this.useApplyAsync = function(value) {
             return isDefined(value) ? (useApplyAsync = !!value, this) : useApplyAsync;
         };
-        var interceptorFactories = this.interceptors = [], xsrfWhitelistedOrigins = this.xsrfWhitelistedOrigins = [];
-        this.$get = [ "$browser", "$httpBackend", "$$cookieReader", "$cacheFactory", "$rootScope", "$q", "$injector", "$sce", function($browser, $httpBackend, $$cookieReader, $cacheFactory, $rootScope, $q, $injector, $sce) {
+        var interceptorFactories = this.interceptors = [], xsrfTrustedOrigins = this.xsrfTrustedOrigins = [];
+        Object.defineProperty(this, "xsrfWhitelistedOrigins", {
+            get: function() {
+                return this.xsrfTrustedOrigins;
+            },
+            set: function(origins) {
+                this.xsrfTrustedOrigins = origins;
+            }
+        }), this.$get = [ "$browser", "$httpBackend", "$$cookieReader", "$cacheFactory", "$rootScope", "$q", "$injector", "$sce", function($browser, $httpBackend, $$cookieReader, $cacheFactory, $rootScope, $q, $injector, $sce) {
             function $http(requestConfig) {
                 function chainInterceptors(promise, interceptors) {
                     for (var i = 0, ii = interceptors.length; ii > i; ) {
@@ -5376,7 +5543,7 @@
                     return interceptors.length = 0, promise;
                 }
                 function completeOutstandingRequest() {
-                    $browser.$$completeOutstandingRequest(noop);
+                    $browser.$$completeOutstandingRequest(noop, "$http");
                 }
                 function executeHeaderFns(headers, config) {
                     var headerContent, processedHeaders = {};
@@ -5417,7 +5584,7 @@
                 }, requestConfig);
                 config.headers = mergeHeaders(requestConfig), config.method = uppercase(config.method), 
                 config.paramSerializer = isString(config.paramSerializer) ? $injector.get(config.paramSerializer) : config.paramSerializer, 
-                $browser.$$incOutstandingRequestCount();
+                $browser.$$incOutstandingRequestCount("$http");
                 var requestInterceptors = [], responseInterceptors = [], promise = $q.resolve(config);
                 return forEach(reversedInterceptors, function(interceptor) {
                     (interceptor.request || interceptor.requestError) && requestInterceptors.unshift(interceptor.request, interceptor.requestError), 
@@ -5517,7 +5684,7 @@
             forEach(interceptorFactories, function(interceptorFactory) {
                 reversedInterceptors.unshift(isString(interceptorFactory) ? $injector.get(interceptorFactory) : $injector.invoke(interceptorFactory));
             });
-            var urlIsAllowedOrigin = urlIsAllowedOriginFactory(xsrfWhitelistedOrigins);
+            var urlIsAllowedOrigin = urlIsAllowedOriginFactory(xsrfTrustedOrigins);
             return $http.pendingRequests = [], createShortMethods("get", "delete", "head", "jsonp"), 
             createShortMethodsWithData("post", "put", "patch"), $http.defaults = defaults, $http;
         } ];
@@ -5616,41 +5783,43 @@
             function $interpolate(text, mustHaveExpression, trustedContext, allOrNothing) {
                 function parseStringifyInterceptor(value) {
                     try {
-                        return value = getValue(value), allOrNothing && !isDefined(value) ? value : stringify(value);
+                        return value = trustedContext && !contextAllowsConcatenation ? $sce.getTrusted(trustedContext, value) : $sce.valueOf(value), 
+                        allOrNothing && !isDefined(value) ? value : stringify(value);
                     } catch (err) {
                         $exceptionHandler($interpolateMinErr.interr(text, err));
                     }
                 }
+                var contextAllowsConcatenation = trustedContext === $sce.URL || trustedContext === $sce.MEDIA_URL;
                 if (!text.length || -1 === text.indexOf(startSymbol)) {
-                    var constantInterp;
-                    if (!mustHaveExpression) {
-                        var unescapedText = unescapeText(text);
-                        constantInterp = valueFn(unescapedText), constantInterp.exp = text, constantInterp.expressions = [], 
-                        constantInterp.$$watchDelegate = constantWatchDelegate;
-                    }
-                    return constantInterp;
+                    if (mustHaveExpression) return;
+                    var unescapedText = unescapeText(text);
+                    contextAllowsConcatenation && (unescapedText = $sce.getTrusted(trustedContext, unescapedText));
+                    var constantInterp = valueFn(unescapedText);
+                    return constantInterp.exp = text, constantInterp.expressions = [], constantInterp.$$watchDelegate = constantWatchDelegate, 
+                    constantInterp;
                 }
                 allOrNothing = !!allOrNothing;
-                for (var startIndex, endIndex, exp, index = 0, expressions = [], parseFns = [], textLength = text.length, concat = [], expressionPositions = []; textLength > index; ) {
+                for (var startIndex, endIndex, parseFns, exp, singleExpression, index = 0, expressions = [], textLength = text.length, concat = [], expressionPositions = []; textLength > index; ) {
                     if (-1 === (startIndex = text.indexOf(startSymbol, index)) || -1 === (endIndex = text.indexOf(endSymbol, startIndex + startSymbolLength))) {
                         index !== textLength && concat.push(unescapeText(text.substring(index)));
                         break;
                     }
                     index !== startIndex && concat.push(unescapeText(text.substring(index, startIndex))), 
                     exp = text.substring(startIndex + startSymbolLength, endIndex), expressions.push(exp), 
-                    parseFns.push($parse(exp, parseStringifyInterceptor)), index = endIndex + endSymbolLength, 
-                    expressionPositions.push(concat.length), concat.push("");
+                    index = endIndex + endSymbolLength, expressionPositions.push(concat.length), concat.push("");
                 }
-                if (trustedContext && concat.length > 1 && $interpolateMinErr.throwNoconcat(text), 
-                !mustHaveExpression || expressions.length) {
+                singleExpression = 1 === concat.length && 1 === expressionPositions.length;
+                var interceptor = contextAllowsConcatenation && singleExpression ? void 0 : parseStringifyInterceptor;
+                if (parseFns = expressions.map(function(exp) {
+                    return $parse(exp, interceptor);
+                }), !mustHaveExpression || expressions.length) {
                     var compute = function(values) {
                         for (var i = 0, ii = expressions.length; ii > i; i++) {
                             if (allOrNothing && isUndefined(values[i])) return;
                             concat[expressionPositions[i]] = values[i];
                         }
-                        return concat.join("");
-                    }, getValue = function(value) {
-                        return trustedContext ? $sce.getTrusted(trustedContext, value) : $sce.valueOf(value);
+                        return contextAllowsConcatenation ? $sce.getTrusted(trustedContext, singleExpression ? concat[0] : concat.join("")) : (trustedContext && concat.length > 1 && $interpolateMinErr.throwNoconcat(text), 
+                        concat.join(""));
                     };
                     return extend(function(context) {
                         var i = 0, ii = expressions.length, values = new Array(ii);
@@ -5683,24 +5852,40 @@
         } ];
     }
     function $IntervalProvider() {
-        this.$get = [ "$rootScope", "$window", "$q", "$$q", "$browser", function($rootScope, $window, $q, $$q, $browser) {
-            function interval(fn, delay, count, invokeApply) {
-                function callback() {
-                    hasParams ? fn.apply(null, args) : fn(iteration);
-                }
-                var hasParams = arguments.length > 4, args = hasParams ? sliceArgs(arguments, 4) : [], setInterval = $window.setInterval, clearInterval = $window.clearInterval, iteration = 0, skipApply = isDefined(invokeApply) && !invokeApply, deferred = (skipApply ? $$q : $q).defer(), promise = deferred.promise;
-                return count = isDefined(count) ? count : 0, promise.$$intervalId = setInterval(function() {
-                    skipApply ? $browser.defer(callback) : $rootScope.$evalAsync(callback), deferred.notify(iteration++), 
-                    count > 0 && iteration >= count && (deferred.resolve(iteration), clearInterval(promise.$$intervalId), 
-                    delete intervals[promise.$$intervalId]), skipApply || $rootScope.$apply();
-                }, delay), intervals[promise.$$intervalId] = deferred, promise;
-            }
-            var intervals = {};
+        this.$get = [ "$$intervalFactory", "$window", function($$intervalFactory, $window) {
+            var intervals = {}, setIntervalFn = function(tick, delay, deferred) {
+                var id = $window.setInterval(tick, delay);
+                return intervals[id] = deferred, id;
+            }, clearIntervalFn = function(id) {
+                $window.clearInterval(id), delete intervals[id];
+            }, interval = $$intervalFactory(setIntervalFn, clearIntervalFn);
             return interval.cancel = function(promise) {
-                return promise && promise.$$intervalId in intervals ? (markQExceptionHandled(intervals[promise.$$intervalId].promise), 
-                intervals[promise.$$intervalId].reject("canceled"), $window.clearInterval(promise.$$intervalId), 
-                delete intervals[promise.$$intervalId], !0) : !1;
+                if (!promise) return !1;
+                if (!promise.hasOwnProperty("$$intervalId")) throw $intervalMinErr("badprom", "`$interval.cancel()` called with a promise that was not generated by `$interval()`.");
+                if (!intervals.hasOwnProperty(promise.$$intervalId)) return !1;
+                var id = promise.$$intervalId, deferred = intervals[id];
+                return markQExceptionHandled(deferred.promise), deferred.reject("canceled"), clearIntervalFn(id), 
+                !0;
             }, interval;
+        } ];
+    }
+    function $$IntervalFactoryProvider() {
+        this.$get = [ "$browser", "$q", "$$q", "$rootScope", function($browser, $q, $$q, $rootScope) {
+            return function(setIntervalFn, clearIntervalFn) {
+                return function(fn, delay, count, invokeApply) {
+                    function callback() {
+                        hasParams ? fn.apply(null, args) : fn(iteration);
+                    }
+                    function tick() {
+                        skipApply ? $browser.defer(callback) : $rootScope.$evalAsync(callback), deferred.notify(iteration++), 
+                        count > 0 && iteration >= count && (deferred.resolve(iteration), clearIntervalFn(promise.$$intervalId)), 
+                        skipApply || $rootScope.$apply();
+                    }
+                    var hasParams = arguments.length > 4, args = hasParams ? sliceArgs(arguments, 4) : [], iteration = 0, skipApply = isDefined(invokeApply) && !invokeApply, deferred = (skipApply ? $$q : $q).defer(), promise = deferred.promise;
+                    return count = isDefined(count) ? count : 0, promise.$$intervalId = setIntervalFn(tick, delay, deferred, skipApply), 
+                    promise;
+                };
+            };
         } ];
     }
     function encodePath(path) {
@@ -5711,6 +5896,10 @@
         for (var segments = path.split("/"), i = segments.length; i--; ) segments[i] = decodeURIComponent(segments[i]), 
         html5Mode && (segments[i] = segments[i].replace(/\//g, "%2F"));
         return segments.join("/");
+    }
+    function normalizePath(pathValue, searchValue, hashValue) {
+        var search = toKeyValue(searchValue), hash = hashValue ? "#" + encodeUriSegment(hashValue) : "", path = encodePath(pathValue);
+        return path + (search ? "?" + search : "") + hash;
     }
     function parseAbsoluteUrl(absoluteUrl, locationObj) {
         var parsedUrl = urlResolve(absoluteUrl);
@@ -5735,9 +5924,6 @@
         var index = url.indexOf("#");
         return -1 === index ? url : url.substr(0, index);
     }
-    function trimEmptyHash(url) {
-        return url.replace(/(#.+)|#$/, "$1");
-    }
     function stripFile(url) {
         return url.substr(0, stripHash(url).lastIndexOf("/") + 1);
     }
@@ -5750,10 +5936,8 @@
             var pathUrl = stripBaseUrl(appBaseNoFile, url);
             if (!isString(pathUrl)) throw $locationMinErr("ipthprfx", 'Invalid url "{0}", missing path prefix "{1}".', url, appBaseNoFile);
             parseAppUrl(pathUrl, this, !0), this.$$path || (this.$$path = "/"), this.$$compose();
-        }, this.$$compose = function() {
-            var search = toKeyValue(this.$$search), hash = this.$$hash ? "#" + encodeUriSegment(this.$$hash) : "";
-            this.$$url = encodePath(this.$$path) + (search ? "?" + search : "") + hash, this.$$absUrl = appBaseNoFile + this.$$url.substr(1), 
-            this.$$urlUpdatedByLocation = !0;
+        }, this.$$normalizeUrl = function(url) {
+            return appBaseNoFile + url.substr(1);
         }, this.$$parseLinkUrl = function(url, relHref) {
             if (relHref && "#" === relHref[0]) return this.hash(relHref.slice(1)), !0;
             var appUrl, prevAppUrl, rewrittenUrl;
@@ -5773,10 +5957,8 @@
             isUndefined(withoutBaseUrl) && (appBase = url, this.replace())) : (withoutHashUrl = stripBaseUrl(hashPrefix, withoutBaseUrl), 
             isUndefined(withoutHashUrl) && (withoutHashUrl = withoutBaseUrl)), parseAppUrl(withoutHashUrl, this, !1), 
             this.$$path = removeWindowsDriveName(this.$$path, withoutHashUrl, appBase), this.$$compose();
-        }, this.$$compose = function() {
-            var search = toKeyValue(this.$$search), hash = this.$$hash ? "#" + encodeUriSegment(this.$$hash) : "";
-            this.$$url = encodePath(this.$$path) + (search ? "?" + search : "") + hash, this.$$absUrl = appBase + (this.$$url ? hashPrefix + this.$$url : ""), 
-            this.$$urlUpdatedByLocation = !0;
+        }, this.$$normalizeUrl = function(url) {
+            return appBase + (url ? hashPrefix + url : "");
         }, this.$$parseLinkUrl = function(url, relHref) {
             return stripHash(appBase) === stripHash(url) ? (this.$$parse(url), !0) : !1;
         };
@@ -5787,10 +5969,8 @@
             var rewrittenUrl, appUrl;
             return appBase === stripHash(url) ? rewrittenUrl = url : (appUrl = stripBaseUrl(appBaseNoFile, url)) ? rewrittenUrl = appBase + hashPrefix + appUrl : appBaseNoFile === url + "/" && (rewrittenUrl = appBaseNoFile), 
             rewrittenUrl && this.$$parse(rewrittenUrl), !!rewrittenUrl;
-        }, this.$$compose = function() {
-            var search = toKeyValue(this.$$search), hash = this.$$hash ? "#" + encodeUriSegment(this.$$hash) : "";
-            this.$$url = encodePath(this.$$path) + (search ? "?" + search : "") + hash, this.$$absUrl = appBase + hashPrefix + this.$$url, 
-            this.$$urlUpdatedByLocation = !0;
+        }, this.$$normalizeUrl = function(url) {
+            return appBase + hashPrefix + url;
         };
     }
     function locationGetter(property) {
@@ -5817,6 +5997,9 @@
             isBoolean(mode.requireBase) && (html5Mode.requireBase = mode.requireBase), (isBoolean(mode.rewriteLinks) || isString(mode.rewriteLinks)) && (html5Mode.rewriteLinks = mode.rewriteLinks), 
             this) : html5Mode;
         }, this.$get = [ "$rootScope", "$browser", "$sniffer", "$rootElement", "$window", function($rootScope, $browser, $sniffer, $rootElement, $window) {
+            function urlsEqual(a, b) {
+                return a === b || urlResolve(a).href === urlResolve(b).href;
+            }
             function setBrowserUrlWithFallback(url, replace, state) {
                 var oldUrl = $location.url(), oldState = $location.$$state;
                 try {
@@ -5845,16 +6028,15 @@
                         var absHref = elm.prop("href"), relHref = elm.attr("href") || elm.attr("xlink:href");
                         isObject(absHref) && "[object SVGAnimatedString]" === absHref.toString() && (absHref = urlResolve(absHref.animVal).href), 
                         IGNORE_URI_REGEXP.test(absHref) || !absHref || elm.attr("target") || event.isDefaultPrevented() || $location.$$parseLinkUrl(absHref, relHref) && (event.preventDefault(), 
-                        $location.absUrl() !== $browser.url() && ($rootScope.$apply(), $window.angular["ff-684208-preventDefault"] = !0));
+                        $location.absUrl() !== $browser.url() && $rootScope.$apply());
                     }
                 }
-            }), trimEmptyHash($location.absUrl()) !== trimEmptyHash(initialUrl) && $browser.url($location.absUrl(), !0);
+            }), $location.absUrl() !== initialUrl && $browser.url($location.absUrl(), !0);
             var initializing = !0;
             return $browser.onUrlChange(function(newUrl, newState) {
                 return startsWith(newUrl, appBaseNoFile) ? ($rootScope.$evalAsync(function() {
                     var defaultPrevented, oldUrl = $location.absUrl(), oldState = $location.$$state;
-                    newUrl = trimEmptyHash(newUrl), $location.$$parse(newUrl), $location.$$state = newState, 
-                    defaultPrevented = $rootScope.$broadcast("$locationChangeStart", newUrl, oldUrl, newState, oldState).defaultPrevented, 
+                    $location.$$parse(newUrl), $location.$$state = newState, defaultPrevented = $rootScope.$broadcast("$locationChangeStart", newUrl, oldUrl, newState, oldState).defaultPrevented, 
                     $location.absUrl() === newUrl && (defaultPrevented ? ($location.$$parse(oldUrl), 
                     $location.$$state = oldState, setBrowserUrlWithFallback(oldUrl, !1, oldState)) : (initializing = !1, 
                     afterLocationChange(oldUrl, oldState)));
@@ -5862,7 +6044,7 @@
             }), $rootScope.$watch(function() {
                 if (initializing || $location.$$urlUpdatedByLocation) {
                     $location.$$urlUpdatedByLocation = !1;
-                    var oldUrl = trimEmptyHash($browser.url()), newUrl = trimEmptyHash($location.absUrl()), oldState = $browser.state(), currentReplace = $location.$$replace, urlOrStateChanged = oldUrl !== newUrl || $location.$$html5 && $sniffer.history && oldState !== $location.$$state;
+                    var oldUrl = $browser.url(), newUrl = $location.absUrl(), oldState = $browser.state(), currentReplace = $location.$$replace, urlOrStateChanged = !urlsEqual(oldUrl, newUrl) || $location.$$html5 && $sniffer.history && oldState !== $location.$$state;
                     (initializing || urlOrStateChanged) && (initializing = !1, $rootScope.$evalAsync(function() {
                         var newUrl = $location.absUrl(), defaultPrevented = $rootScope.$broadcast("$locationChangeStart", newUrl, oldUrl, $location.$$state, oldState).defaultPrevented;
                         $location.absUrl() === newUrl && (defaultPrevented ? ($location.$$parse(oldUrl), 
@@ -6072,8 +6254,7 @@
                   case "string":
                     if (exp = exp.trim(), cacheKey = exp, parsedExpression = cache[cacheKey], !parsedExpression) {
                         var lexer = new Lexer($parseOptions), parser = new Parser(lexer, $filter, $parseOptions);
-                        parsedExpression = parser.parse(exp), parsedExpression.constant ? parsedExpression.$$watchDelegate = constantWatchDelegate : parsedExpression.oneTime ? parsedExpression.$$watchDelegate = parsedExpression.literal ? oneTimeLiteralWatchDelegate : oneTimeWatchDelegate : parsedExpression.inputs && (parsedExpression.$$watchDelegate = inputsWatchDelegate), 
-                        cache[cacheKey] = parsedExpression;
+                        parsedExpression = parser.parse(exp), cache[cacheKey] = addWatchDelegate(parsedExpression);
                     }
                     return addInterceptor(parsedExpression, interceptorFn);
 
@@ -6115,32 +6296,22 @@
                 }, listener, objectEquality, prettyPrintExpression);
             }
             function oneTimeWatchDelegate(scope, listener, objectEquality, parsedExpression, prettyPrintExpression) {
-                function oneTimeWatch(scope) {
-                    return parsedExpression(scope);
+                function unwatchIfDone() {
+                    isDone(lastValue) && unwatch();
                 }
-                function oneTimeListener(value, old, scope) {
-                    lastValue = value, isFunction(listener) && listener(value, old, scope), isDefined(value) && scope.$$postDigest(function() {
-                        isDefined(lastValue) && unwatch();
-                    });
+                function oneTimeWatch(scope, locals, assign, inputs) {
+                    return lastValue = useInputs && inputs ? inputs[0] : exp(scope, locals, assign, inputs), 
+                    isDone(lastValue) && scope.$$postDigest(unwatchIfDone), post(lastValue);
                 }
-                var unwatch, lastValue;
-                return unwatch = parsedExpression.inputs ? inputsWatchDelegate(scope, oneTimeListener, objectEquality, parsedExpression, prettyPrintExpression) : scope.$watch(oneTimeWatch, oneTimeListener, objectEquality);
+                var unwatch, lastValue, isDone = parsedExpression.literal ? isAllDefined : isDefined, exp = parsedExpression.$$intercepted || parsedExpression, post = parsedExpression.$$interceptor || identity, useInputs = parsedExpression.inputs && !exp.inputs;
+                return oneTimeWatch.literal = parsedExpression.literal, oneTimeWatch.constant = parsedExpression.constant, 
+                oneTimeWatch.inputs = parsedExpression.inputs, addWatchDelegate(oneTimeWatch), unwatch = scope.$watch(oneTimeWatch, listener, objectEquality, prettyPrintExpression);
             }
-            function oneTimeLiteralWatchDelegate(scope, listener, objectEquality, parsedExpression) {
-                function isAllDefined(value) {
-                    var allDefined = !0;
-                    return forEach(value, function(val) {
-                        isDefined(val) || (allDefined = !1);
-                    }), allDefined;
-                }
-                var unwatch, lastValue;
-                return unwatch = scope.$watch(function(scope) {
-                    return parsedExpression(scope);
-                }, function(value, old, scope) {
-                    lastValue = value, isFunction(listener) && listener(value, old, scope), isAllDefined(value) && scope.$$postDigest(function() {
-                        isAllDefined(lastValue) && unwatch();
-                    });
-                }, objectEquality);
+            function isAllDefined(value) {
+                var allDefined = !0;
+                return forEach(value, function(val) {
+                    isDefined(val) || (allDefined = !1);
+                }), allDefined;
             }
             function constantWatchDelegate(scope, listener, objectEquality, parsedExpression) {
                 var unwatch = scope.$watch(function(scope) {
@@ -6148,23 +6319,33 @@
                 }, listener, objectEquality);
                 return unwatch;
             }
+            function addWatchDelegate(parsedExpression) {
+                return parsedExpression.constant ? parsedExpression.$$watchDelegate = constantWatchDelegate : parsedExpression.oneTime ? parsedExpression.$$watchDelegate = oneTimeWatchDelegate : parsedExpression.inputs && (parsedExpression.$$watchDelegate = inputsWatchDelegate), 
+                parsedExpression;
+            }
+            function chainInterceptors(first, second) {
+                function chainedInterceptor(value) {
+                    return second(first(value));
+                }
+                return chainedInterceptor.$stateful = first.$stateful || second.$stateful, chainedInterceptor.$$pure = first.$$pure && second.$$pure, 
+                chainedInterceptor;
+            }
             function addInterceptor(parsedExpression, interceptorFn) {
                 if (!interceptorFn) return parsedExpression;
-                var watchDelegate = parsedExpression.$$watchDelegate, useInputs = !1, regularWatch = watchDelegate !== oneTimeLiteralWatchDelegate && watchDelegate !== oneTimeWatchDelegate, fn = regularWatch ? function(scope, locals, assign, inputs) {
+                parsedExpression.$$interceptor && (interceptorFn = chainInterceptors(parsedExpression.$$interceptor, interceptorFn), 
+                parsedExpression = parsedExpression.$$intercepted);
+                var useInputs = !1, fn = function(scope, locals, assign, inputs) {
                     var value = useInputs && inputs ? inputs[0] : parsedExpression(scope, locals, assign, inputs);
-                    return interceptorFn(value, scope, locals);
-                } : function(scope, locals, assign, inputs) {
-                    var value = parsedExpression(scope, locals, assign, inputs), result = interceptorFn(value, scope, locals);
-                    return isDefined(value) ? result : value;
+                    return interceptorFn(value);
                 };
-                return useInputs = !parsedExpression.inputs, watchDelegate && watchDelegate !== inputsWatchDelegate ? (fn.$$watchDelegate = watchDelegate, 
-                fn.inputs = parsedExpression.inputs) : interceptorFn.$stateful || (fn.$$watchDelegate = inputsWatchDelegate, 
-                fn.inputs = parsedExpression.inputs ? parsedExpression.inputs : [ parsedExpression ]), 
-                fn.inputs && (fn.inputs = fn.inputs.map(function(e) {
+                return fn.$$intercepted = parsedExpression, fn.$$interceptor = interceptorFn, fn.literal = parsedExpression.literal, 
+                fn.oneTime = parsedExpression.oneTime, fn.constant = parsedExpression.constant, 
+                interceptorFn.$stateful || (useInputs = !parsedExpression.inputs, fn.inputs = parsedExpression.inputs ? parsedExpression.inputs : [ parsedExpression ], 
+                interceptorFn.$$pure || (fn.inputs = fn.inputs.map(function(e) {
                     return e.isPure === PURITY_RELATIVE ? function(s) {
                         return e(s);
                     } : e;
-                })), fn;
+                }))), addWatchDelegate(fn);
             }
             var noUnsafeEval = csp().noUnsafeEval, $parseOptions = {
                 csp: noUnsafeEval,
@@ -6364,7 +6545,7 @@
         state.pur = !0;
     }
     function markQExceptionHandled(q) {
-        markQStateExceptionHandled(q.$$state);
+        q.$$state && markQStateExceptionHandled(q.$$state);
     }
     function $$RAFProvider() {
         this.$get = [ "$window", "$timeout", function($window, $timeout) {
@@ -6432,7 +6613,7 @@
             function scheduleApplyAsync() {
                 null === applyAsyncId && (applyAsyncId = $browser.defer(function() {
                     $rootScope.$apply(flushApplyAsync);
-                }));
+                }, null, "$applyAsync"));
             }
             Scope.prototype = {
                 constructor: Scope,
@@ -6463,7 +6644,12 @@
                 },
                 $watchGroup: function(watchExpressions, listener) {
                     function watchGroupAction() {
-                        changeReactionScheduled = !1, firstRun ? (firstRun = !1, listener(newValues, newValues, self)) : listener(newValues, oldValues, self);
+                        changeReactionScheduled = !1;
+                        try {
+                            firstRun ? (firstRun = !1, listener(newValues, newValues, self)) : listener(newValues, oldValues, self);
+                        } finally {
+                            for (var i = 0; i < watchExpressions.length; i++) oldValues[i] = newValues[i];
+                        }
                     }
                     var oldValues = new Array(watchExpressions.length), newValues = new Array(watchExpressions.length), deregisterFns = [], self = this, changeReactionScheduled = !1, firstRun = !0;
                     if (!watchExpressions.length) {
@@ -6477,8 +6663,8 @@
                     return 1 === watchExpressions.length ? this.$watch(watchExpressions[0], function(value, oldValue, scope) {
                         newValues[0] = value, oldValues[0] = oldValue, listener(newValues, value === oldValue ? newValues : oldValues, scope);
                     }) : (forEach(watchExpressions, function(expr, i) {
-                        var unwatchFn = self.$watch(expr, function(value, oldValue) {
-                            newValues[i] = value, oldValues[i] = oldValue, changeReactionScheduled || (changeReactionScheduled = !0, 
+                        var unwatchFn = self.$watch(expr, function(value) {
+                            newValues[i] = value, changeReactionScheduled || (changeReactionScheduled = !0, 
                             self.$evalAsync(watchGroupAction));
                         });
                         deregisterFns.push(unwatchFn);
@@ -6523,12 +6709,12 @@
                             for (var key in newValue) hasOwnProperty.call(newValue, key) && (veryOldValue[key] = newValue[key]);
                         } else veryOldValue = newValue;
                     }
-                    $watchCollectionInterceptor.$stateful = !0;
+                    $watchCollectionInterceptor.$$pure = $parse(obj).literal, $watchCollectionInterceptor.$stateful = !$watchCollectionInterceptor.$$pure;
                     var newValue, oldValue, veryOldValue, self = this, trackVeryOldValue = listener.length > 1, changeDetected = 0, changeDetector = $parse(obj, $watchCollectionInterceptor), internalArray = [], internalObject = {}, initRun = !0, oldLength = 0;
                     return this.$watch(changeDetector, $watchCollectionAction);
                 },
                 $digest: function() {
-                    var watch, value, last, fn, get, watchers, dirty, next, current, logIdx, asyncTask, ttl = TTL, target = this, watchLog = [];
+                    var watch, value, last, fn, get, watchers, dirty, next, current, logIdx, asyncTask, ttl = TTL, target = asyncQueue.length ? $rootScope : this, watchLog = [];
                     beginPhase("$digest"), $browser.$$checkUrlChange(), this === $rootScope && null !== applyAsyncId && ($browser.defer.cancel(applyAsyncId), 
                     flushApplyAsync()), lastDirtyWatch = null;
                     do {
@@ -6600,7 +6786,7 @@
                 $evalAsync: function(expr, locals) {
                     $rootScope.$$phase || asyncQueue.length || $browser.defer(function() {
                         asyncQueue.length && $rootScope.$digest();
-                    }), asyncQueue.push({
+                    }, null, "$evalAsync"), asyncQueue.push({
                         scope: this,
                         fn: $parse(expr),
                         locals: locals
@@ -6696,15 +6882,15 @@
         } ];
     }
     function $$SanitizeUriProvider() {
-        var aHrefSanitizationWhitelist = /^\s*(https?|s?ftp|mailto|tel|file):/, imgSrcSanitizationWhitelist = /^\s*((https?|ftp|file|blob):|data:image\/)/;
-        this.aHrefSanitizationWhitelist = function(regexp) {
-            return isDefined(regexp) ? (aHrefSanitizationWhitelist = regexp, this) : aHrefSanitizationWhitelist;
-        }, this.imgSrcSanitizationWhitelist = function(regexp) {
-            return isDefined(regexp) ? (imgSrcSanitizationWhitelist = regexp, this) : imgSrcSanitizationWhitelist;
+        var aHrefSanitizationTrustedUrlList = /^\s*(https?|s?ftp|mailto|tel|file):/, imgSrcSanitizationTrustedUrlList = /^\s*((https?|ftp|file|blob):|data:image\/)/;
+        this.aHrefSanitizationTrustedUrlList = function(regexp) {
+            return isDefined(regexp) ? (aHrefSanitizationTrustedUrlList = regexp, this) : aHrefSanitizationTrustedUrlList;
+        }, this.imgSrcSanitizationTrustedUrlList = function(regexp) {
+            return isDefined(regexp) ? (imgSrcSanitizationTrustedUrlList = regexp, this) : imgSrcSanitizationTrustedUrlList;
         }, this.$get = function() {
-            return function(uri, isImage) {
-                var normalizedVal, regex = isImage ? imgSrcSanitizationWhitelist : aHrefSanitizationWhitelist;
-                return normalizedVal = urlResolve(uri && uri.trim()).href, "" === normalizedVal || normalizedVal.match(regex) ? uri : "unsafe:" + normalizedVal;
+            return function(uri, isMediaUrl) {
+                var regex = isMediaUrl ? imgSrcSanitizationTrustedUrlList : aHrefSanitizationTrustedUrlList, normalizedVal = urlResolve(uri && uri.trim()).href;
+                return "" === normalizedVal || normalizedVal.match(regex) ? uri : "unsafe:" + normalizedVal;
             };
         };
     }
@@ -6729,22 +6915,36 @@
     }
     function $SceDelegateProvider() {
         this.SCE_CONTEXTS = SCE_CONTEXTS;
-        var resourceUrlWhitelist = [ "self" ], resourceUrlBlacklist = [];
-        this.resourceUrlWhitelist = function(value) {
-            return arguments.length && (resourceUrlWhitelist = adjustMatchers(value)), resourceUrlWhitelist;
-        }, this.resourceUrlBlacklist = function(value) {
-            return arguments.length && (resourceUrlBlacklist = adjustMatchers(value)), resourceUrlBlacklist;
-        }, this.$get = [ "$injector", function($injector) {
+        var trustedResourceUrlList = [ "self" ], bannedResourceUrlList = [];
+        this.trustedResourceUrlList = function(value) {
+            return arguments.length && (trustedResourceUrlList = adjustMatchers(value)), trustedResourceUrlList;
+        }, Object.defineProperty(this, "resourceUrlWhitelist", {
+            get: function() {
+                return this.trustedResourceUrlList;
+            },
+            set: function(value) {
+                this.trustedResourceUrlList = value;
+            }
+        }), this.bannedResourceUrlList = function(value) {
+            return arguments.length && (bannedResourceUrlList = adjustMatchers(value)), bannedResourceUrlList;
+        }, Object.defineProperty(this, "resourceUrlBlacklist", {
+            get: function() {
+                return this.bannedResourceUrlList;
+            },
+            set: function(value) {
+                this.bannedResourceUrlList = value;
+            }
+        }), this.$get = [ "$injector", "$$sanitizeUri", function($injector, $$sanitizeUri) {
             function matchUrl(matcher, parsedUrl) {
-                return "self" === matcher ? urlIsSameOrigin(parsedUrl) : !!matcher.exec(parsedUrl.href);
+                return "self" === matcher ? urlIsSameOrigin(parsedUrl) || urlIsSameOriginAsBaseUrl(parsedUrl) : !!matcher.exec(parsedUrl.href);
             }
             function isResourceUrlAllowedByPolicy(url) {
                 var i, n, parsedUrl = urlResolve(url.toString()), allowed = !1;
-                for (i = 0, n = resourceUrlWhitelist.length; n > i; i++) if (matchUrl(resourceUrlWhitelist[i], parsedUrl)) {
+                for (i = 0, n = trustedResourceUrlList.length; n > i; i++) if (matchUrl(trustedResourceUrlList[i], parsedUrl)) {
                     allowed = !0;
                     break;
                 }
-                if (allowed) for (i = 0, n = resourceUrlBlacklist.length; n > i; i++) if (matchUrl(resourceUrlBlacklist[i], parsedUrl)) {
+                if (allowed) for (i = 0, n = bannedResourceUrlList.length; n > i; i++) if (matchUrl(bannedResourceUrlList[i], parsedUrl)) {
                     allowed = !1;
                     break;
                 }
@@ -6776,6 +6976,8 @@
                 if (null === maybeTrusted || isUndefined(maybeTrusted) || "" === maybeTrusted) return maybeTrusted;
                 var constructor = byType.hasOwnProperty(type) ? byType[type] : null;
                 if (constructor && maybeTrusted instanceof constructor) return maybeTrusted.$$unwrapTrustedValue();
+                if (isFunction(maybeTrusted.$$unwrapTrustedValue) && (maybeTrusted = maybeTrusted.$$unwrapTrustedValue()), 
+                type === SCE_CONTEXTS.MEDIA_URL || type === SCE_CONTEXTS.URL) return $$sanitizeUri(maybeTrusted.toString(), type === SCE_CONTEXTS.MEDIA_URL);
                 if (type === SCE_CONTEXTS.RESOURCE_URL) {
                     if (isResourceUrlAllowedByPolicy(maybeTrusted)) return maybeTrusted;
                     throw $sceMinErr("insecurl", "Blocked loading resource from url not allowed by $sceDelegate policy.  URL: {0}", maybeTrusted.toString());
@@ -6789,8 +6991,8 @@
             $injector.has("$sanitize") && (htmlSanitizer = $injector.get("$sanitize"));
             var trustedValueHolderBase = generateHolderType(), byType = {};
             return byType[SCE_CONTEXTS.HTML] = generateHolderType(trustedValueHolderBase), byType[SCE_CONTEXTS.CSS] = generateHolderType(trustedValueHolderBase), 
-            byType[SCE_CONTEXTS.URL] = generateHolderType(trustedValueHolderBase), byType[SCE_CONTEXTS.JS] = generateHolderType(trustedValueHolderBase), 
-            byType[SCE_CONTEXTS.RESOURCE_URL] = generateHolderType(byType[SCE_CONTEXTS.URL]), 
+            byType[SCE_CONTEXTS.MEDIA_URL] = generateHolderType(trustedValueHolderBase), byType[SCE_CONTEXTS.URL] = generateHolderType(byType[SCE_CONTEXTS.MEDIA_URL]), 
+            byType[SCE_CONTEXTS.JS] = generateHolderType(trustedValueHolderBase), byType[SCE_CONTEXTS.RESOURCE_URL] = generateHolderType(byType[SCE_CONTEXTS.URL]), 
             {
                 trustAs: trustAs,
                 getTrusted: getTrusted,
@@ -6850,6 +7052,53 @@
             };
         } ];
     }
+    function $$TaskTrackerFactoryProvider() {
+        this.$get = valueFn(function(log) {
+            return new TaskTracker(log);
+        });
+    }
+    function TaskTracker(log) {
+        function completeTask(fn, taskType) {
+            taskType = taskType || DEFAULT_TASK_TYPE;
+            try {
+                fn();
+            } finally {
+                decTaskCount(taskType);
+                var countForType = taskCounts[taskType], countForAll = taskCounts[ALL_TASKS_TYPE];
+                if (!countForAll || !countForType) for (var nextCb, getNextCallback = countForAll ? getLastCallbackForType : getLastCallback; nextCb = getNextCallback(taskType); ) try {
+                    nextCb();
+                } catch (e) {
+                    log.error(e);
+                }
+            }
+        }
+        function decTaskCount(taskType) {
+            taskType = taskType || DEFAULT_TASK_TYPE, taskCounts[taskType] && (taskCounts[taskType]--, 
+            taskCounts[ALL_TASKS_TYPE]--);
+        }
+        function getLastCallback() {
+            var cbInfo = taskCallbacks.pop();
+            return cbInfo && cbInfo.cb;
+        }
+        function getLastCallbackForType(taskType) {
+            for (var i = taskCallbacks.length - 1; i >= 0; --i) {
+                var cbInfo = taskCallbacks[i];
+                if (cbInfo.type === taskType) return taskCallbacks.splice(i, 1), cbInfo.cb;
+            }
+        }
+        function incTaskCount(taskType) {
+            taskType = taskType || DEFAULT_TASK_TYPE, taskCounts[taskType] = (taskCounts[taskType] || 0) + 1, 
+            taskCounts[ALL_TASKS_TYPE] = (taskCounts[ALL_TASKS_TYPE] || 0) + 1;
+        }
+        function notifyWhenNoPendingTasks(callback, taskType) {
+            taskType = taskType || ALL_TASKS_TYPE, taskCounts[taskType] ? taskCallbacks.push({
+                type: taskType,
+                cb: callback
+            }) : callback();
+        }
+        var self = this, taskCounts = {}, taskCallbacks = [], ALL_TASKS_TYPE = self.ALL_TASKS_TYPE = "$$all$$", DEFAULT_TASK_TYPE = self.DEFAULT_TASK_TYPE = "$$default$$";
+        self.completeTask = completeTask, self.incTaskCount = incTaskCount, self.notifyWhenNoPendingTasks = notifyWhenNoPendingTasks;
+    }
     function $TemplateRequestProvider() {
         var httpOptions;
         this.httpOptions = function(val) {
@@ -6871,7 +7120,7 @@
                 }, httpOptions))["finally"](function() {
                     handleRequestFn.totalPendingRequests--;
                 }).then(function(response) {
-                    return $templateCache.put(tpl, response.data), response.data;
+                    return $templateCache.put(tpl, response.data);
                 }, handleError);
             }
             return handleRequestFn.totalPendingRequests = 0, handleRequestFn;
@@ -6919,27 +7168,34 @@
                         delete deferreds[promise.$$timeoutId];
                     }
                     skipApply || $rootScope.$apply();
-                }, delay), promise.$$timeoutId = timeoutId, deferreds[timeoutId] = deferred, promise;
+                }, delay, "$timeout"), promise.$$timeoutId = timeoutId, deferreds[timeoutId] = deferred, 
+                promise;
             }
             var deferreds = {};
             return timeout.cancel = function(promise) {
-                return promise && promise.$$timeoutId in deferreds ? (markQExceptionHandled(deferreds[promise.$$timeoutId].promise), 
-                deferreds[promise.$$timeoutId].reject("canceled"), delete deferreds[promise.$$timeoutId], 
-                $browser.defer.cancel(promise.$$timeoutId)) : !1;
+                if (!promise) return !1;
+                if (!promise.hasOwnProperty("$$timeoutId")) throw $timeoutMinErr("badprom", "`$timeout.cancel()` called with a promise that was not generated by `$timeout()`.");
+                if (!deferreds.hasOwnProperty(promise.$$timeoutId)) return !1;
+                var id = promise.$$timeoutId, deferred = deferreds[id];
+                return markQExceptionHandled(deferred.promise), deferred.reject("canceled"), delete deferreds[id], 
+                $browser.defer.cancel(id);
             }, timeout;
         } ];
     }
     function urlResolve(url) {
         if (!isString(url)) return url;
         var href = url;
-        return msie && (urlParsingNode.setAttribute("href", href), href = urlParsingNode.href), 
-        urlParsingNode.setAttribute("href", href), {
+        msie && (urlParsingNode.setAttribute("href", href), href = urlParsingNode.href), 
+        urlParsingNode.setAttribute("href", href);
+        var hostname = urlParsingNode.hostname;
+        return !ipv6InBrackets && hostname.indexOf(":") > -1 && (hostname = "[" + hostname + "]"), 
+        {
             href: urlParsingNode.href,
             protocol: urlParsingNode.protocol ? urlParsingNode.protocol.replace(/:$/, "") : "",
             host: urlParsingNode.host,
             search: urlParsingNode.search ? urlParsingNode.search.replace(/^\?/, "") : "",
             hash: urlParsingNode.hash ? urlParsingNode.hash.replace(/^#/, "") : "",
-            hostname: urlParsingNode.hostname,
+            hostname: hostname,
             port: urlParsingNode.port,
             pathname: "/" === urlParsingNode.pathname.charAt(0) ? urlParsingNode.pathname : "/" + urlParsingNode.pathname
         };
@@ -6947,8 +7203,11 @@
     function urlIsSameOrigin(requestUrl) {
         return urlsAreSameOrigin(requestUrl, originUrl);
     }
-    function urlIsAllowedOriginFactory(whitelistedOriginUrls) {
-        var parsedAllowedOriginUrls = [ originUrl ].concat(whitelistedOriginUrls.map(urlResolve));
+    function urlIsSameOriginAsBaseUrl(requestUrl) {
+        return urlsAreSameOrigin(requestUrl, getBaseUrl());
+    }
+    function urlIsAllowedOriginFactory(trustedOriginUrls) {
+        var parsedAllowedOriginUrls = [ originUrl ].concat(trustedOriginUrls.map(urlResolve));
         return function(requestUrl) {
             var parsedUrl = urlResolve(requestUrl);
             return parsedAllowedOriginUrls.some(urlsAreSameOrigin.bind(null, parsedUrl));
@@ -6956,6 +7215,11 @@
     }
     function urlsAreSameOrigin(url1, url2) {
         return url1 = urlResolve(url1), url2 = urlResolve(url2), url1.protocol === url2.protocol && url1.host === url2.host;
+    }
+    function getBaseUrl() {
+        return window.document.baseURI ? window.document.baseURI : (baseUrlParsingNode || (baseUrlParsingNode = window.document.createElement("a"), 
+        baseUrlParsingNode.href = ".", baseUrlParsingNode = baseUrlParsingNode.cloneNode(!1)), 
+        baseUrlParsingNode.href);
     }
     function $WindowProvider() {
         this.$get = valueFn(window);
@@ -7273,7 +7537,7 @@
         }
         function getPredicateValue(value, index) {
             var type = typeof value;
-            return null === value ? (type = "string", value = "null") : "object" === type && (value = objectValue(value)), 
+            return null === value ? type = "null" : "object" === type && (value = objectValue(value)), 
             {
                 value: value,
                 type: type,
@@ -7286,7 +7550,7 @@
                 var value1 = v1.value, value2 = v2.value;
                 "string" === type1 ? (value1 = value1.toLowerCase(), value2 = value2.toLowerCase()) : "object" === type1 && (isObject(value1) && (value1 = v1.index), 
                 isObject(value2) && (value2 = v2.index)), value1 !== value2 && (result = value2 > value1 ? -1 : 1);
-            } else result = type2 > type1 ? -1 : 1;
+            } else result = "undefined" === type1 ? 1 : "undefined" === type2 ? -1 : "null" === type1 ? 1 : "null" === type2 ? -1 : type2 > type1 ? -1 : 1;
             return result;
         }
         return function(array, sortPredicate, reverseOrder, compareFn) {
@@ -7436,37 +7700,41 @@
         return NaN;
     }
     function createDateParser(regexp, mapping) {
-        return function(iso, date) {
+        return function(iso, previousDate) {
             var parts, map;
             if (isDate(iso)) return iso;
             if (isString(iso)) {
                 if ('"' === iso.charAt(0) && '"' === iso.charAt(iso.length - 1) && (iso = iso.substring(1, iso.length - 1)), 
                 ISO_DATE_REGEXP.test(iso)) return new Date(iso);
-                if (regexp.lastIndex = 0, parts = regexp.exec(iso)) return parts.shift(), map = date ? {
-                    yyyy: date.getFullYear(),
-                    MM: date.getMonth() + 1,
-                    dd: date.getDate(),
-                    HH: date.getHours(),
-                    mm: date.getMinutes(),
-                    ss: date.getSeconds(),
-                    sss: date.getMilliseconds() / 1e3
-                } : {
-                    yyyy: 1970,
-                    MM: 1,
-                    dd: 1,
-                    HH: 0,
-                    mm: 0,
-                    ss: 0,
-                    sss: 0
-                }, forEach(parts, function(part, index) {
-                    index < mapping.length && (map[mapping[index]] = +part);
-                }), new Date(map.yyyy, map.MM - 1, map.dd, map.HH, map.mm, map.ss || 0, 1e3 * map.sss || 0);
+                if (regexp.lastIndex = 0, parts = regexp.exec(iso)) {
+                    parts.shift(), map = previousDate ? {
+                        yyyy: previousDate.getFullYear(),
+                        MM: previousDate.getMonth() + 1,
+                        dd: previousDate.getDate(),
+                        HH: previousDate.getHours(),
+                        mm: previousDate.getMinutes(),
+                        ss: previousDate.getSeconds(),
+                        sss: previousDate.getMilliseconds() / 1e3
+                    } : {
+                        yyyy: 1970,
+                        MM: 1,
+                        dd: 1,
+                        HH: 0,
+                        mm: 0,
+                        ss: 0,
+                        sss: 0
+                    }, forEach(parts, function(part, index) {
+                        index < mapping.length && (map[mapping[index]] = +part);
+                    });
+                    var date = new Date(map.yyyy, map.MM - 1, map.dd, map.HH, map.mm, map.ss || 0, 1e3 * map.sss || 0);
+                    return map.yyyy < 100 && date.setFullYear(map.yyyy), date;
+                }
             }
             return NaN;
         };
     }
     function createDateInputType(type, regexp, parseDate, format) {
-        return function(scope, element, attr, ctrl, $sniffer, $browser, $filter) {
+        return function(scope, element, attr, ctrl, $sniffer, $browser, $filter, $parse) {
             function isValidDate(value) {
                 return value && !(value.getTime && value.getTime() !== value.getTime());
             }
@@ -7480,47 +7748,54 @@
                 return !isNaN(parsedDate) && timezone && (parsedDate = convertTimezoneToLocal(parsedDate, timezone)), 
                 parsedDate;
             }
-            badInputChecker(scope, element, attr, ctrl), baseInputType(scope, element, attr, ctrl, $sniffer, $browser);
-            var previousDate, previousTimezone;
-            if (ctrl.$$parserName = type, ctrl.$parsers.push(function(value) {
-                return ctrl.$isEmpty(value) ? null : regexp.test(value) ? parseDateAndConvertTimeZoneToLocal(value, previousDate) : void 0;
+            function formatter(value, timezone) {
+                var targetFormat = format;
+                isTimeType && isString(ctrl.$options.getOption("timeSecondsFormat")) && (targetFormat = format.replace("ss.sss", ctrl.$options.getOption("timeSecondsFormat")).replace(/:$/, ""));
+                var formatted = $filter("date")(value, targetFormat, timezone);
+                return isTimeType && ctrl.$options.getOption("timeStripZeroSeconds") && (formatted = formatted.replace(/(?::00)?(?:\.000)?$/, "")), 
+                formatted;
+            }
+            badInputChecker(scope, element, attr, ctrl, type), baseInputType(scope, element, attr, ctrl, $sniffer, $browser);
+            var previousDate, previousTimezone, isTimeType = "time" === type || "datetimelocal" === type;
+            if (ctrl.$parsers.push(function(value) {
+                return ctrl.$isEmpty(value) ? null : regexp.test(value) ? parseDateAndConvertTimeZoneToLocal(value, previousDate) : void (ctrl.$$parserName = type);
             }), ctrl.$formatters.push(function(value) {
                 if (value && !isDate(value)) throw ngModelMinErr("datefmt", "Expected `{0}` to be a date", value);
                 if (isValidDate(value)) {
                     previousDate = value;
                     var timezone = ctrl.$options.getOption("timezone");
                     return timezone && (previousTimezone = timezone, previousDate = convertTimezoneToLocal(previousDate, timezone, !0)), 
-                    $filter("date")(value, format, timezone);
+                    formatter(value, timezone);
                 }
                 return previousDate = null, previousTimezone = null, "";
             }), isDefined(attr.min) || attr.ngMin) {
-                var minVal;
+                var minVal = attr.min || $parse(attr.ngMin)(scope), parsedMinVal = parseObservedDateValue(minVal);
                 ctrl.$validators.min = function(value) {
-                    return !isValidDate(value) || isUndefined(minVal) || parseDate(value) >= minVal;
+                    return !isValidDate(value) || isUndefined(parsedMinVal) || parseDate(value) >= parsedMinVal;
                 }, attr.$observe("min", function(val) {
-                    minVal = parseObservedDateValue(val), ctrl.$validate();
+                    val !== minVal && (parsedMinVal = parseObservedDateValue(val), minVal = val, ctrl.$validate());
                 });
             }
             if (isDefined(attr.max) || attr.ngMax) {
-                var maxVal;
+                var maxVal = attr.max || $parse(attr.ngMax)(scope), parsedMaxVal = parseObservedDateValue(maxVal);
                 ctrl.$validators.max = function(value) {
-                    return !isValidDate(value) || isUndefined(maxVal) || parseDate(value) <= maxVal;
+                    return !isValidDate(value) || isUndefined(parsedMaxVal) || parseDate(value) <= parsedMaxVal;
                 }, attr.$observe("max", function(val) {
-                    maxVal = parseObservedDateValue(val), ctrl.$validate();
+                    val !== maxVal && (parsedMaxVal = parseObservedDateValue(val), maxVal = val, ctrl.$validate());
                 });
             }
         };
     }
-    function badInputChecker(scope, element, attr, ctrl) {
+    function badInputChecker(scope, element, attr, ctrl, parserName) {
         var node = element[0], nativeValidation = ctrl.$$hasNativeValidators = isObject(node.validity);
         nativeValidation && ctrl.$parsers.push(function(value) {
             var validity = element.prop(VALIDITY_STATE_PROPERTY) || {};
-            return validity.badInput || validity.typeMismatch ? void 0 : value;
+            return validity.badInput || validity.typeMismatch ? void (ctrl.$$parserName = parserName) : value;
         });
     }
     function numberFormatterParser(ctrl) {
-        ctrl.$$parserName = "number", ctrl.$parsers.push(function(value) {
-            return ctrl.$isEmpty(value) ? null : NUMBER_REGEXP.test(value) ? parseFloat(value) : void 0;
+        ctrl.$parsers.push(function(value) {
+            return ctrl.$isEmpty(value) ? null : NUMBER_REGEXP.test(value) ? parseFloat(value) : void (ctrl.$$parserName = "number");
         }), ctrl.$formatters.push(function(value) {
             if (!ctrl.$isEmpty(value)) {
                 if (!isNumber(value)) throw ngModelMinErr("numfmt", "Expected `{0}` to be a number", value);
@@ -7555,29 +7830,42 @@
         }
         return (value - stepBase) % step === 0;
     }
-    function numberInputType(scope, element, attr, ctrl, $sniffer, $browser) {
-        badInputChecker(scope, element, attr, ctrl), numberFormatterParser(ctrl), baseInputType(scope, element, attr, ctrl, $sniffer, $browser);
-        var minVal, maxVal;
-        if ((isDefined(attr.min) || attr.ngMin) && (ctrl.$validators.min = function(value) {
-            return ctrl.$isEmpty(value) || isUndefined(minVal) || value >= minVal;
-        }, attr.$observe("min", function(val) {
-            minVal = parseNumberAttrVal(val), ctrl.$validate();
-        })), (isDefined(attr.max) || attr.ngMax) && (ctrl.$validators.max = function(value) {
-            return ctrl.$isEmpty(value) || isUndefined(maxVal) || maxVal >= value;
-        }, attr.$observe("max", function(val) {
-            maxVal = parseNumberAttrVal(val), ctrl.$validate();
-        })), isDefined(attr.step) || attr.ngStep) {
-            var stepVal;
+    function numberInputType(scope, element, attr, ctrl, $sniffer, $browser, $filter, $parse) {
+        badInputChecker(scope, element, attr, ctrl, "number"), numberFormatterParser(ctrl), 
+        baseInputType(scope, element, attr, ctrl, $sniffer, $browser);
+        var parsedMinVal;
+        if (isDefined(attr.min) || attr.ngMin) {
+            var minVal = attr.min || $parse(attr.ngMin)(scope);
+            parsedMinVal = parseNumberAttrVal(minVal), ctrl.$validators.min = function(modelValue, viewValue) {
+                return ctrl.$isEmpty(viewValue) || isUndefined(parsedMinVal) || viewValue >= parsedMinVal;
+            }, attr.$observe("min", function(val) {
+                val !== minVal && (parsedMinVal = parseNumberAttrVal(val), minVal = val, ctrl.$validate());
+            });
+        }
+        if (isDefined(attr.max) || attr.ngMax) {
+            var maxVal = attr.max || $parse(attr.ngMax)(scope), parsedMaxVal = parseNumberAttrVal(maxVal);
+            ctrl.$validators.max = function(modelValue, viewValue) {
+                return ctrl.$isEmpty(viewValue) || isUndefined(parsedMaxVal) || parsedMaxVal >= viewValue;
+            }, attr.$observe("max", function(val) {
+                val !== maxVal && (parsedMaxVal = parseNumberAttrVal(val), maxVal = val, ctrl.$validate());
+            });
+        }
+        if (isDefined(attr.step) || attr.ngStep) {
+            var stepVal = attr.step || $parse(attr.ngStep)(scope), parsedStepVal = parseNumberAttrVal(stepVal);
             ctrl.$validators.step = function(modelValue, viewValue) {
-                return ctrl.$isEmpty(viewValue) || isUndefined(stepVal) || isValidForStep(viewValue, minVal || 0, stepVal);
+                return ctrl.$isEmpty(viewValue) || isUndefined(parsedStepVal) || isValidForStep(viewValue, parsedMinVal || 0, parsedStepVal);
             }, attr.$observe("step", function(val) {
-                stepVal = parseNumberAttrVal(val), ctrl.$validate();
+                val !== stepVal && (parsedStepVal = parseNumberAttrVal(val), stepVal = val, ctrl.$validate());
             });
         }
     }
     function rangeInputType(scope, element, attr, ctrl, $sniffer, $browser) {
         function setInitialValueAndObserver(htmlAttrName, changeFn) {
-            element.attr(htmlAttrName, attr[htmlAttrName]), attr.$observe(htmlAttrName, changeFn);
+            element.attr(htmlAttrName, attr[htmlAttrName]);
+            var oldVal = attr[htmlAttrName];
+            attr.$observe(htmlAttrName, function(val) {
+                val !== oldVal && (oldVal = val, changeFn(val));
+            });
         }
         function minChange(val) {
             if (minVal = parseNumberAttrVal(val), !isNumberNaN(ctrl.$modelValue)) if (supportsRange) {
@@ -7593,21 +7881,24 @@
             } else ctrl.$validate();
         }
         function stepChange(val) {
-            stepVal = parseNumberAttrVal(val), isNumberNaN(ctrl.$modelValue) || (supportsRange && ctrl.$viewValue !== element.val() ? ctrl.$setViewValue(element.val()) : ctrl.$validate());
+            stepVal = parseNumberAttrVal(val), isNumberNaN(ctrl.$modelValue) || (supportsRange ? ctrl.$viewValue !== element.val() && ctrl.$setViewValue(element.val()) : ctrl.$validate());
         }
-        badInputChecker(scope, element, attr, ctrl), numberFormatterParser(ctrl), baseInputType(scope, element, attr, ctrl, $sniffer, $browser);
+        badInputChecker(scope, element, attr, ctrl, "range"), numberFormatterParser(ctrl), 
+        baseInputType(scope, element, attr, ctrl, $sniffer, $browser);
         var supportsRange = ctrl.$$hasNativeValidators && "range" === element[0].type, minVal = supportsRange ? 0 : void 0, maxVal = supportsRange ? 100 : void 0, stepVal = supportsRange ? 1 : void 0, validity = element[0].validity, hasMinAttr = isDefined(attr.min), hasMaxAttr = isDefined(attr.max), hasStepAttr = isDefined(attr.step), originalRender = ctrl.$render;
         ctrl.$render = supportsRange && isDefined(validity.rangeUnderflow) && isDefined(validity.rangeOverflow) ? function() {
             originalRender(), ctrl.$setViewValue(element.val());
-        } : originalRender, hasMinAttr && (ctrl.$validators.min = supportsRange ? function() {
+        } : originalRender, hasMinAttr && (minVal = parseNumberAttrVal(attr.min), ctrl.$validators.min = supportsRange ? function() {
             return !0;
         } : function(modelValue, viewValue) {
             return ctrl.$isEmpty(viewValue) || isUndefined(minVal) || viewValue >= minVal;
-        }, setInitialValueAndObserver("min", minChange)), hasMaxAttr && (ctrl.$validators.max = supportsRange ? function() {
+        }, setInitialValueAndObserver("min", minChange)), hasMaxAttr && (maxVal = parseNumberAttrVal(attr.max), 
+        ctrl.$validators.max = supportsRange ? function() {
             return !0;
         } : function(modelValue, viewValue) {
             return ctrl.$isEmpty(viewValue) || isUndefined(maxVal) || maxVal >= viewValue;
-        }, setInitialValueAndObserver("max", maxChange)), hasStepAttr && (ctrl.$validators.step = supportsRange ? function() {
+        }, setInitialValueAndObserver("max", maxChange)), hasStepAttr && (stepVal = parseNumberAttrVal(attr.step), 
+        ctrl.$validators.step = supportsRange ? function() {
             return !validity.stepMismatch;
         } : function(modelValue, viewValue) {
             return ctrl.$isEmpty(viewValue) || isUndefined(stepVal) || isValidForStep(viewValue, minVal || 0, stepVal);
@@ -7615,14 +7906,14 @@
     }
     function urlInputType(scope, element, attr, ctrl, $sniffer, $browser) {
         baseInputType(scope, element, attr, ctrl, $sniffer, $browser), stringBasedInputType(ctrl), 
-        ctrl.$$parserName = "url", ctrl.$validators.url = function(modelValue, viewValue) {
+        ctrl.$validators.url = function(modelValue, viewValue) {
             var value = modelValue || viewValue;
             return ctrl.$isEmpty(value) || URL_REGEXP.test(value);
         };
     }
     function emailInputType(scope, element, attr, ctrl, $sniffer, $browser) {
         baseInputType(scope, element, attr, ctrl, $sniffer, $browser), stringBasedInputType(ctrl), 
-        ctrl.$$parserName = "email", ctrl.$validators.email = function(modelValue, viewValue) {
+        ctrl.$validators.email = function(modelValue, viewValue) {
             var value = modelValue || viewValue;
             return ctrl.$isEmpty(value) || EMAIL_REGEXP.test(value);
         };
@@ -7634,7 +7925,7 @@
             var value;
             element[0].checked && (value = attr.value, doTrim && (value = trim(value)), ctrl.$setViewValue(value, ev && ev.type));
         };
-        element.on("click", listener), ctrl.$render = function() {
+        element.on("change", listener), ctrl.$render = function() {
             var value = attr.value;
             doTrim && (value = trim(value)), element[0].checked = value === ctrl.$viewValue;
         }, attr.$observe("value", ctrl.$render);
@@ -7651,7 +7942,7 @@
         var trueValue = parseConstantExpr($parse, scope, "ngTrueValue", attr.ngTrueValue, !0), falseValue = parseConstantExpr($parse, scope, "ngFalseValue", attr.ngFalseValue, !1), listener = function(ev) {
             ctrl.$setViewValue(element[0].checked, ev && ev.type);
         };
-        element.on("click", listener), ctrl.$render = function() {
+        element.on("change", listener), ctrl.$render = function() {
             element[0].checked = ctrl.$viewValue;
         }, ctrl.$isEmpty = function(value) {
             return value === !1;
@@ -7676,21 +7967,11 @@
             return classString && classString.split(" ");
         }
         function toClassString(classValue) {
+            if (!classValue) return classValue;
             var classString = classValue;
-            return isArray(classValue) ? classString = classValue.map(toClassString).join(" ") : isObject(classValue) && (classString = Object.keys(classValue).filter(function(key) {
+            return isArray(classValue) ? classString = classValue.map(toClassString).join(" ") : isObject(classValue) ? classString = Object.keys(classValue).filter(function(key) {
                 return classValue[key];
-            }).join(" ")), classString;
-        }
-        function toFlatValue(classValue) {
-            var flatValue = classValue;
-            if (isArray(classValue)) flatValue = classValue.map(toFlatValue); else if (isObject(classValue)) {
-                var hasUndefined = !1;
-                flatValue = Object.keys(classValue).filter(function(key) {
-                    var value = classValue[key];
-                    return !hasUndefined && isUndefined(value) && (hasUndefined = !0), value;
-                }), hasUndefined && flatValue.push(void 0);
-            }
-            return flatValue;
+            }).join(" ") : isString(classValue) || (classString = classValue + ""), classString;
         }
         name = "ngClass" + name;
         var indexWatchExpression;
@@ -7719,21 +8000,39 @@
                         newModulo === selector ? addClasses(oldClassString) : removeClasses(oldClassString), 
                         oldModulo = newModulo;
                     }
-                    function ngClassOneTimeWatchAction(newClassValue) {
-                        var newClassString = toClassString(newClassValue);
-                        newClassString !== oldClassString && ngClassWatchAction(newClassString);
-                    }
                     function ngClassWatchAction(newClassString) {
                         oldModulo === selector && updateClasses(oldClassString, newClassString), oldClassString = newClassString;
                     }
-                    var oldClassString, expression = attr[name].trim(), isOneTime = ":" === expression.charAt(0) && ":" === expression.charAt(1), watchInterceptor = isOneTime ? toFlatValue : toClassString, watchExpression = $parse(expression, watchInterceptor), watchAction = isOneTime ? ngClassOneTimeWatchAction : ngClassWatchAction, classCounts = element.data("$classCounts"), oldModulo = !0;
+                    var oldClassString, classCounts = element.data("$classCounts"), oldModulo = !0;
                     classCounts || (classCounts = createMap(), element.data("$classCounts", classCounts)), 
                     "ngClass" !== name && (indexWatchExpression || (indexWatchExpression = $parse("$index", function($index) {
                         return 1 & $index;
-                    })), scope.$watch(indexWatchExpression, ngClassIndexWatchAction)), scope.$watch(watchExpression, watchAction, isOneTime);
+                    })), scope.$watch(indexWatchExpression, ngClassIndexWatchAction)), scope.$watch($parse(attr[name], toClassString), ngClassWatchAction);
                 }
             };
         } ];
+    }
+    function createEventDirective($parse, $rootScope, $exceptionHandler, directiveName, eventName, forceAsync) {
+        return {
+            restrict: "A",
+            compile: function($element, attr) {
+                var fn = $parse(attr[directiveName]);
+                return function(scope, element) {
+                    element.on(eventName, function(event) {
+                        var callback = function() {
+                            fn(scope, {
+                                $event: event
+                            });
+                        };
+                        if ($rootScope.$$phase) if (forceAsync) scope.$evalAsync(callback); else try {
+                            callback();
+                        } catch (error) {
+                            $exceptionHandler(error);
+                        } else scope.$apply(callback);
+                    });
+                };
+            }
+        };
     }
     function NgModelController($scope, $exceptionHandler, $attr, $element, $parse, $animate, $timeout, $q, $interpolate) {
         this.$viewValue = Number.NaN, this.$modelValue = Number.NaN, this.$$rawModelValue = void 0, 
@@ -7745,11 +8044,10 @@
         this.$$updateEventHandler = this.$$updateEventHandler.bind(this), this.$$parsedNgModel = $parse($attr.ngModel), 
         this.$$parsedNgModelAssign = this.$$parsedNgModel.assign, this.$$ngModelGet = this.$$parsedNgModel, 
         this.$$ngModelSet = this.$$parsedNgModelAssign, this.$$pendingDebounce = null, this.$$parserValid = void 0, 
-        this.$$currentValidationRunId = 0, Object.defineProperty(this, "$$scope", {
-            value: $scope
-        }), this.$$attr = $attr, this.$$element = $element, this.$$animate = $animate, this.$$timeout = $timeout, 
-        this.$$parse = $parse, this.$$q = $q, this.$$exceptionHandler = $exceptionHandler, 
-        setupValidity(this), setupModelWatcher(this);
+        this.$$parserName = "parse", this.$$currentValidationRunId = 0, this.$$scope = $scope, 
+        this.$$rootScope = $scope.$root, this.$$attr = $attr, this.$$element = $element, 
+        this.$$animate = $animate, this.$$timeout = $timeout, this.$$parse = $parse, this.$$q = $q, 
+        this.$$exceptionHandler = $exceptionHandler, setupValidity(this), setupModelWatcher(this);
     }
     function setupModelWatcher(ctrl) {
         ctrl.$$scope.$watch(function(scope) {
@@ -7769,29 +8067,29 @@
     function setOptionSelectedStatus(optionEl, value) {
         optionEl.prop("selected", value), optionEl.attr("selected", value);
     }
-    var minErrConfig = {
-        objectMaxDepth: 5
+    function parsePatternAttr(regex, patternExp, elm) {
+        if (!regex) return void 0;
+        if (isString(regex) && (regex = new RegExp("^" + regex + "$")), !regex.test) throw minErr("ngPattern")("noregexp", "Expected {0} to be a RegExp but was {1}. Element: {2}", patternExp, regex, startingTag(elm));
+        return regex;
+    }
+    function parseLength(val) {
+        var intVal = toInt(val);
+        return isNumberNaN(intVal) ? -1 : intVal;
+    }
+    var msie, jqLite, jQuery, angularModule, minErrConfig = {
+        objectMaxDepth: 5,
+        urlErrorParamsEnabled: !0
     }, REGEX_STRING_REGEXP = /^\/(.+)\/([a-z]*)$/, VALIDITY_STATE_PROPERTY = "validity", hasOwnProperty = Object.prototype.hasOwnProperty, lowercase = function(string) {
         return isString(string) ? string.toLowerCase() : string;
     }, uppercase = function(string) {
         return isString(string) ? string.toUpperCase() : string;
-    }, manualLowercase = function(s) {
-        return isString(s) ? s.replace(/[A-Z]/g, function(ch) {
-            return String.fromCharCode(32 | ch.charCodeAt(0));
-        }) : s;
-    }, manualUppercase = function(s) {
-        return isString(s) ? s.replace(/[a-z]/g, function(ch) {
-            return String.fromCharCode(-33 & ch.charCodeAt(0));
-        }) : s;
-    };
-    "i" !== "I".toLowerCase() && (lowercase = manualLowercase, uppercase = manualUppercase);
-    var msie, jqLite, jQuery, angularModule, slice = [].slice, splice = [].splice, push = [].push, toString = Object.prototype.toString, getPrototypeOf = Object.getPrototypeOf, ngMinErr = minErr("ng"), angular = window.angular || (window.angular = {}), uid = 0;
+    }, slice = [].slice, splice = [].splice, push = [].push, toString = Object.prototype.toString, getPrototypeOf = Object.getPrototypeOf, ngMinErr = minErr("ng"), angular = window.angular || (window.angular = {}), uid = 0;
     msie = window.document.documentMode;
     var isNumberNaN = Number.isNaN || function(num) {
         return num !== num;
     };
     noop.$inject = [], identity.$inject = [];
-    var isArray = Array.isArray, TYPED_ARRAY_REGEXP = /^\[object (?:Uint8|Uint8Clamped|Uint16|Uint32|Int8|Int16|Int32|Float32|Float64)Array]$/, trim = function(value) {
+    var TYPED_ARRAY_REGEXP = /^\[object (?:Uint8|Uint8Clamped|Uint16|Uint32|Int8|Int16|Int32|Float32|Float64)Array]$/, trim = function(value) {
         return isString(value) ? value.trim() : value;
     }, escapeForRegexp = function(s) {
         return s.replace(/([-()[\]{}+?*.$^|,:#<!\\])/g, "\\$1").replace(/\x08/g, "\\x08");
@@ -7826,11 +8124,11 @@
         }
         return jq.name_ = name;
     }, ALL_COLONS = /:/g, ngAttrPrefixes = [ "ng-", "data-ng-", "ng:", "x-ng-" ], isAutoBootstrapAllowed = allowAutoBootstrap(window.document), SNAKE_CASE_REGEXP = /[A-Z]/g, bindJQueryFired = !1, NODE_TYPE_ELEMENT = 1, NODE_TYPE_ATTRIBUTE = 2, NODE_TYPE_TEXT = 3, NODE_TYPE_COMMENT = 8, NODE_TYPE_DOCUMENT = 9, NODE_TYPE_DOCUMENT_FRAGMENT = 11, version = {
-        full: "1.6.10",
+        full: "1.8.2",
         major: 1,
-        minor: 6,
-        dot: 10,
-        codeName: "crystalline-persuasion"
+        minor: 8,
+        dot: 2,
+        codeName: "meteoric-mining"
     };
     JQLite.expando = "ng339";
     var jqCache = JQLite.cache = {}, jqId = 1;
@@ -7841,15 +8139,22 @@
         mouseleave: "mouseout",
         mouseenter: "mouseover"
     }, jqLiteMinErr = minErr("jqLite"), SINGLE_TAG_REGEXP = /^<([\w-]+)\s*\/?>(?:<\/\1>|)$/, HTML_REGEXP = /<|&#?\w+;/, TAG_NAME_REGEXP = /<([\w:-]+)/, XHTML_TAG_REGEXP = /<(?!area|br|col|embed|hr|img|input|link|meta|param)(([\w:-]+)[^>]*)\/>/gi, wrapMap = {
+        thead: [ "table" ],
+        col: [ "colgroup", "table" ],
+        tr: [ "tbody", "table" ],
+        td: [ "tr", "tbody", "table" ]
+    };
+    wrapMap.tbody = wrapMap.tfoot = wrapMap.colgroup = wrapMap.caption = wrapMap.thead, 
+    wrapMap.th = wrapMap.td;
+    var wrapMapIE9 = {
         option: [ 1, '<select multiple="multiple">', "</select>" ],
-        thead: [ 1, "<table>", "</table>" ],
-        col: [ 2, "<table><colgroup>", "</colgroup></table>" ],
-        tr: [ 2, "<table><tbody>", "</tbody></table>" ],
-        td: [ 3, "<table><tbody><tr>", "</tr></tbody></table>" ],
         _default: [ 0, "", "" ]
     };
-    wrapMap.optgroup = wrapMap.option, wrapMap.tbody = wrapMap.tfoot = wrapMap.colgroup = wrapMap.caption = wrapMap.thead, 
-    wrapMap.th = wrapMap.td;
+    for (var key in wrapMap) {
+        var wrapMapValueClosing = wrapMap[key], wrapMapValue = wrapMapValueClosing.slice().reverse();
+        wrapMapIE9[key] = [ wrapMapValue.length, "<" + wrapMapValue.join("><") + ">", "</" + wrapMapValueClosing.join("></") + ">" ];
+    }
+    wrapMapIE9.optgroup = wrapMapIE9.option;
     var jqLiteContains = window.Node.prototype.contains || function(arg) {
         return !!(16 & this.compareDocumentPosition(arg));
     }, JQLitePrototype = JQLite.prototype = {
@@ -7888,7 +8193,7 @@
         removeData: jqLiteRemoveData,
         hasData: jqLiteHasData,
         cleanData: function(nodes) {
-            for (var i = 0, ii = nodes.length; ii > i; i++) jqLiteRemoveData(nodes[i]);
+            for (var i = 0, ii = nodes.length; ii > i; i++) jqLiteRemoveData(nodes[i]), jqLiteOff(nodes[i]);
         }
     }, function(fn, name) {
         JQLite[name] = fn;
@@ -8093,8 +8398,8 @@
     var nanKey = Object.create(null);
     NgMapShim.prototype = {
         _idx: function(key) {
-            return key === this._lastKey ? this._lastIndex : (this._lastKey = key, this._lastIndex = this._keys.indexOf(key), 
-            this._lastIndex);
+            return key !== this._lastKey && (this._lastKey = key, this._lastIndex = this._keys.indexOf(key)), 
+            this._lastIndex;
         },
         _transformKey: function(key) {
             return isNumberNaN(key) ? nanKey : key;
@@ -8103,6 +8408,11 @@
             key = this._transformKey(key);
             var idx = this._idx(key);
             return -1 !== idx ? this._values[idx] : void 0;
+        },
+        has: function(key) {
+            key = this._transformKey(key);
+            var idx = this._idx(key);
+            return -1 !== idx;
         },
         set: function(key, value) {
             key = this._transformKey(key);
@@ -8197,7 +8507,7 @@
                 pin: $$animateQueue.pin,
                 enabled: $$animateQueue.enabled,
                 cancel: function(runner) {
-                    runner.end && runner.end();
+                    runner.cancel && runner.cancel();
                 },
                 enter: function(element, parent, after, options) {
                     return parent = parent && jqLite(parent), after = after && jqLite(after), parent = parent || after.parent(), 
@@ -8375,7 +8685,7 @@
     }, $interpolateMinErr.interr = function(text, err) {
         return $interpolateMinErr("interr", "Can't interpolate: {0}\n{1}", text, err.toString());
     };
-    var $jsonpCallbacksProvider = function() {
+    var $intervalMinErr = minErr("$interval"), $jsonpCallbacksProvider = function() {
         this.$get = function() {
             function createCallback(callbackId) {
                 var callback = function(data) {
@@ -8409,6 +8719,10 @@
         $$absUrl: "",
         $$html5: !1,
         $$replace: !1,
+        $$compose: function() {
+            this.$$url = normalizePath(this.$$path, this.$$search, this.$$hash), this.$$absUrl = this.$$normalizeUrl(this.$$url), 
+            this.$$urlUpdatedByLocation = !0;
+        },
         absUrl: locationGetter("$$absUrl"),
         url: function(url) {
             if (isUndefined(url)) return this.$$url;
@@ -9467,13 +9781,16 @@
             };
         }
     };
-    var $sceMinErr = minErr("$sce"), SCE_CONTEXTS = {
+    var baseUrlParsingNode, $sceMinErr = minErr("$sce"), SCE_CONTEXTS = {
         HTML: "html",
         CSS: "css",
+        MEDIA_URL: "mediaUrl",
         URL: "url",
         RESOURCE_URL: "resourceUrl",
         JS: "js"
-    }, UNDERSCORE_LOWERCASE_REGEXP = /_([a-z])/g, $templateRequestMinErr = minErr("$compile"), urlParsingNode = window.document.createElement("a"), originUrl = urlResolve(window.location.href);
+    }, UNDERSCORE_LOWERCASE_REGEXP = /_([a-z])/g, $templateRequestMinErr = minErr("$templateRequest"), $timeoutMinErr = minErr("$timeout"), urlParsingNode = window.document.createElement("a"), originUrl = urlResolve(window.location.href);
+    urlParsingNode.href = "http://[::1]";
+    var ipv6InBrackets = "[::1]" === urlParsingNode.hostname;
     $$CookieReader.$inject = [ "$document" ], $FilterProvider.$inject = [ "$provide" ];
     var MAX_DIGITS = 22, DECIMAL_SEP = ".", ZERO_CHAR = "0";
     currencyFilter.$inject = [ "$locale" ], numberFilter.$inject = [ "$locale" ];
@@ -9559,27 +9876,30 @@
         };
     }), forEach([ "src", "srcset", "href" ], function(attrName) {
         var normalized = directiveNormalize("ng-" + attrName);
-        ngAttributeAliasDirectives[normalized] = function() {
+        ngAttributeAliasDirectives[normalized] = [ "$sce", function($sce) {
             return {
                 priority: 99,
                 link: function(scope, element, attr) {
                     var propName = attrName, name = attrName;
                     "href" === attrName && "[object SVGAnimatedString]" === toString.call(element.prop("href")) && (name = "xlinkHref", 
-                    attr.$attr[name] = "xlink:href", propName = null), attr.$observe(normalized, function(value) {
+                    attr.$attr[name] = "xlink:href", propName = null), attr.$set(normalized, $sce.getTrustedMediaUrl(attr[normalized])), 
+                    attr.$observe(normalized, function(value) {
                         return value ? (attr.$set(name, value), void (msie && propName && element.prop(propName, attr[name]))) : void ("href" === attrName && attr.$set(name, null));
                     });
                 }
             };
-        };
+        } ];
     });
     var nullFormCtrl = {
         $addControl: noop,
+        $getControls: valueFn([]),
         $$renameControl: nullFormRenameControl,
         $removeControl: noop,
         $setValidity: noop,
         $setDirty: noop,
         $setPristine: noop,
-        $setSubmitted: noop
+        $setSubmitted: noop,
+        $$setSubmitted: noop
     }, PENDING_CLASS = "ng-pending", SUBMITTED_CLASS = "ng-submitted";
     FormController.$inject = [ "$element", "$attrs", "$scope", "$animate", "$interpolate" ], 
     FormController.prototype = {
@@ -9596,6 +9916,9 @@
         $addControl: function(control) {
             assertNotHasOwnProperty(control.$name, "input"), this.$$controls.push(control), 
             control.$name && (this[control.$name] = control), control.$$parentForm = this;
+        },
+        $getControls: function() {
+            return shallowCopy(this.$$controls);
         },
         $$renameControl: function(control, newName) {
             var oldName = control.$name;
@@ -9627,8 +9950,14 @@
             });
         },
         $setSubmitted: function() {
+            for (var rootForm = this; rootForm.$$parentForm && rootForm.$$parentForm !== nullFormCtrl; ) rootForm = rootForm.$$parentForm;
+            rootForm.$$setSubmitted();
+        },
+        $$setSubmitted: function() {
             this.$$animate.addClass(this.$$element, SUBMITTED_CLASS), this.$submitted = !0, 
-            this.$$parentForm.$setSubmitted();
+            forEach(this.$$controls, function(control) {
+                control.$$setSubmitted && control.$$setSubmitted();
+            });
         }
     }, addSetValidityMethod({
         clazz: FormController,
@@ -9719,7 +10048,30 @@
                 }
             }
         };
-    } ], CONSTANT_VALUE_REGEXP = /^(true|false|\d+)$/, ngValueDirective = function() {
+    } ], hiddenInputBrowserCacheDirective = function() {
+        var valueProperty = {
+            configurable: !0,
+            enumerable: !1,
+            get: function() {
+                return this.getAttribute("value") || "";
+            },
+            set: function(val) {
+                this.setAttribute("value", val);
+            }
+        };
+        return {
+            restrict: "E",
+            priority: 200,
+            compile: function(_, attr) {
+                return "hidden" === lowercase(attr.type) ? {
+                    pre: function(scope, element, attr, ctrls) {
+                        var node = element[0];
+                        node.parentNode && node.parentNode.insertBefore(node, node.nextSibling), Object.defineProperty && Object.defineProperty(node, "value", valueProperty);
+                    }
+                } : void 0;
+            }
+        };
+    }, CONSTANT_VALUE_REGEXP = /^(true|false|\d+)$/, ngValueDirective = function() {
         function updateElementValue(element, attr, value) {
             var propValue = isDefined(value) ? value : 9 === msie ? "" : null;
             element.prop("value", propValue), attr.$set("value", value);
@@ -9801,23 +10153,8 @@
     };
     forEach("click dblclick mousedown mouseup mouseover mouseout mousemove mouseenter mouseleave keydown keyup keypress submit focus blur copy cut paste".split(" "), function(eventName) {
         var directiveName = directiveNormalize("ng-" + eventName);
-        ngEventDirectives[directiveName] = [ "$parse", "$rootScope", function($parse, $rootScope) {
-            return {
-                restrict: "A",
-                compile: function($element, attr) {
-                    var fn = $parse(attr[directiveName]);
-                    return function(scope, element) {
-                        element.on(eventName, function(event) {
-                            var callback = function() {
-                                fn(scope, {
-                                    $event: event
-                                });
-                            };
-                            forceAsyncEvents[eventName] && $rootScope.$$phase ? scope.$evalAsync(callback) : scope.$apply(callback);
-                        });
-                    };
-                }
-            };
+        ngEventDirectives[directiveName] = [ "$parse", "$rootScope", "$exceptionHandler", function($parse, $rootScope, $exceptionHandler) {
+            return createEventDirective($parse, $rootScope, $exceptionHandler, directiveName, eventName, forceAsyncEvents[eventName]);
         } ];
     });
     var ngIfDirective = [ "$animate", "$compile", function($animate, $compile) {
@@ -9980,7 +10317,7 @@
         },
         $$runValidators: function(modelValue, viewValue, doneCallback) {
             function processParseErrors() {
-                var errorKey = that.$$parserName || "parse";
+                var errorKey = that.$$parserName;
                 return isUndefined(that.$$parserValid) ? (setValidity(errorKey, null), !0) : (that.$$parserValid || (forEach(that.$validators, function(v, name) {
                     setValidity(name, null);
                 }), forEach(that.$asyncValidators, function(v, name) {
@@ -10030,7 +10367,8 @@
                 that.$modelValue !== prevModelValue && that.$$writeModelToScope();
             }
             var viewValue = this.$$lastCommittedViewValue, modelValue = viewValue, that = this;
-            if (this.$$parserValid = isUndefined(modelValue) ? void 0 : !0, this.$$parserValid) for (var i = 0; i < this.$parsers.length; i++) if (modelValue = this.$parsers[i](modelValue), 
+            if (this.$$parserValid = isUndefined(modelValue) ? void 0 : !0, this.$setValidity(this.$$parserName, null), 
+            this.$$parserName = "parse", this.$$parserValid) for (var i = 0; i < this.$parsers.length; i++) if (modelValue = this.$parsers[i](modelValue), 
             isUndefined(modelValue)) {
                 this.$$parserValid = !1;
                 break;
@@ -10056,12 +10394,12 @@
         },
         $$debounceViewValueCommit: function(trigger) {
             var debounceDelay = this.$options.getOption("debounce");
-            isNumber(debounceDelay[trigger]) ? debounceDelay = debounceDelay[trigger] : isNumber(debounceDelay["default"]) && (debounceDelay = debounceDelay["default"]), 
+            isNumber(debounceDelay[trigger]) ? debounceDelay = debounceDelay[trigger] : isNumber(debounceDelay["default"]) && -1 === this.$options.getOption("updateOn").indexOf(trigger) ? debounceDelay = debounceDelay["default"] : isNumber(debounceDelay["*"]) && (debounceDelay = debounceDelay["*"]), 
             this.$$timeout.cancel(this.$$pendingDebounce);
             var that = this;
             debounceDelay > 0 ? this.$$pendingDebounce = this.$$timeout(function() {
                 that.$commitViewValue();
-            }, debounceDelay) : this.$$scope.$root.$$phase ? this.$commitViewValue() : this.$$scope.$apply(function() {
+            }, debounceDelay) : this.$$rootScope.$$phase ? this.$commitViewValue() : this.$$scope.$apply(function() {
                 that.$commitViewValue();
             });
         },
@@ -10362,6 +10700,26 @@
                 });
             }
         };
+    } ], ngRefMinErr = minErr("ngRef"), ngRefDirective = [ "$parse", function($parse) {
+        return {
+            priority: -1,
+            restrict: "A",
+            compile: function(tElement, tAttrs) {
+                var controllerName = directiveNormalize(nodeName_(tElement)), getter = $parse(tAttrs.ngRef), setter = getter.assign || function() {
+                    throw ngRefMinErr("nonassign", 'Expression in ngRef="{0}" is non-assignable!', tAttrs.ngRef);
+                };
+                return function(scope, element, attrs) {
+                    var refValue;
+                    if (attrs.hasOwnProperty("ngRefRead")) {
+                        if ("$element" === attrs.ngRefRead) refValue = element; else if (refValue = element.data("$" + attrs.ngRefRead + "Controller"), 
+                        !refValue) throw ngRefMinErr("noctrl", 'The controller for ngRefRead="{0}" could not be found on ngRef="{1}"', attrs.ngRefRead, tAttrs.ngRef);
+                    } else refValue = element.data("$" + controllerName + "Controller");
+                    refValue = refValue || element, setter(scope, refValue), element.on("$destroy", function() {
+                        getter(scope) === refValue && setter(scope, null);
+                    });
+                };
+            }
+        };
     } ], ngRepeatDirective = [ "$parse", "$animate", "$compile", function($parse, $animate, $compile) {
         var NG_REMOVED = "$$NG_REMOVED", ngRepeatMinErr = minErr("ngRepeat"), updateScope = function(scope, index, valueIdentifier, value, keyIdentifier, key, arrayLength) {
             scope[valueIdentifier] = value, keyIdentifier && (scope[keyIdentifier] = key), scope.$index = index, 
@@ -10371,6 +10729,10 @@
             return block.clone[0];
         }, getBlockEnd = function(block) {
             return block.clone[block.clone.length - 1];
+        }, trackByIdArrayFn = function($scope, key, value) {
+            return hashKey(value);
+        }, trackByIdObjFn = function($scope, key) {
+            return key;
         };
         return {
             restrict: "A",
@@ -10386,18 +10748,17 @@
                 if (match = lhs.match(/^(?:(\s*[$\w]+)|\(\s*([$\w]+)\s*,\s*([$\w]+)\s*\))$/), !match) throw ngRepeatMinErr("iidexp", "'_item_' in '_item_ in _collection_' should be an identifier or '(_key_, _value_)' expression, but got '{0}'.", lhs);
                 var valueIdentifier = match[3] || match[1], keyIdentifier = match[2];
                 if (aliasAs && (!/^[$a-zA-Z_][$a-zA-Z0-9_]*$/.test(aliasAs) || /^(null|undefined|this|\$index|\$first|\$middle|\$last|\$even|\$odd|\$parent|\$root|\$id)$/.test(aliasAs))) throw ngRepeatMinErr("badident", "alias '{0}' is invalid --- must be a valid JS identifier which is not a reserved name.", aliasAs);
-                var trackByExpGetter, trackByIdExpFn, trackByIdArrayFn, trackByIdObjFn, hashFnLocals = {
-                    $id: hashKey
-                };
-                return trackByExp ? trackByExpGetter = $parse(trackByExp) : (trackByIdArrayFn = function(key, value) {
-                    return hashKey(value);
-                }, trackByIdObjFn = function(key) {
-                    return key;
-                }), function($scope, $element, $attr, ctrl, $transclude) {
-                    trackByExpGetter && (trackByIdExpFn = function(key, value, index) {
+                var trackByIdExpFn;
+                if (trackByExp) {
+                    var hashFnLocals = {
+                        $id: hashKey
+                    }, trackByExpGetter = $parse(trackByExp);
+                    trackByIdExpFn = function($scope, key, value, index) {
                         return keyIdentifier && (hashFnLocals[keyIdentifier] = key), hashFnLocals[valueIdentifier] = value, 
                         hashFnLocals.$index = index, trackByExpGetter($scope, hashFnLocals);
-                    });
+                    };
+                }
+                return function($scope, $element, $attr, ctrl, $transclude) {
                     var lastBlockMap = createMap();
                     $scope.$watchCollection(rhs, function(collection) {
                         var index, length, nextNode, collectionLength, key, value, trackById, trackByIdFn, collectionKeys, block, nextBlockOrder, elementsToRemove, previousNode = $element[0], nextBlockMap = createMap();
@@ -10408,7 +10769,7 @@
                         }
                         for (collectionLength = collectionKeys.length, nextBlockOrder = new Array(collectionLength), 
                         index = 0; collectionLength > index; index++) if (key = collection === collectionKeys ? index : collectionKeys[index], 
-                        value = collection[key], trackById = trackByIdFn(key, value, index), lastBlockMap[trackById]) block = lastBlockMap[trackById], 
+                        value = collection[key], trackById = trackByIdFn($scope, key, value, index), lastBlockMap[trackById]) block = lastBlockMap[trackById], 
                         delete lastBlockMap[trackById], nextBlockMap[trackById] = block, nextBlockOrder[index] = block; else {
                             if (nextBlockMap[trackById]) throw forEach(nextBlockOrder, function(block) {
                                 block && block.scope && (lastBlockMap[block.id] = block);
@@ -10419,6 +10780,7 @@
                                 clone: void 0
                             }, nextBlockMap[trackById] = !0;
                         }
+                        hashFnLocals && (hashFnLocals[valueIdentifier] = void 0);
                         for (var blockKey in lastBlockMap) {
                             if (block = lastBlockMap[blockKey], elementsToRemove = getBlockNodes(block.clone), 
                             $animate.leave(elementsToRemove), elementsToRemove[0].parentNode) for (index = 0, 
@@ -10467,11 +10829,11 @@
             }
         };
     } ], ngStyleDirective = ngDirective(function(scope, element, attr) {
-        scope.$watch(attr.ngStyle, function(newStyles, oldStyles) {
+        scope.$watchCollection(attr.ngStyle, function(newStyles, oldStyles) {
             oldStyles && newStyles !== oldStyles && forEach(oldStyles, function(val, style) {
                 element.css(style, "");
             }), newStyles && element.css(newStyles);
-        }, !0);
+        });
     }), ngSwitchDirective = [ "$animate", "$compile", function($animate, $compile) {
         return {
             require: "ngSwitch",
@@ -10646,7 +11008,7 @@
         var renderScheduled = !1, updateScheduled = !1;
         self.registerOption = function(optionScope, optionElement, optionAttrs, interpolateValueFn, interpolateTextFn) {
             if (optionAttrs.$attr.ngValue) {
-                var oldVal, hashedVal = NaN;
+                var oldVal, hashedVal;
                 optionAttrs.$observe("value", function(newVal) {
                     var removal, previouslySelected = optionElement.prop("selected");
                     isDefined(hashedVal) && (self.removeOption(oldVal), delete self.selectValueMap[hashedVal], 
@@ -10736,67 +11098,77 @@
                 };
             }
         };
-    } ], requiredDirective = function() {
-        return {
-            restrict: "A",
-            require: "?ngModel",
-            link: function(scope, elm, attr, ctrl) {
-                ctrl && (attr.required = !0, ctrl.$validators.required = function(modelValue, viewValue) {
-                    return !attr.required || !ctrl.$isEmpty(viewValue);
-                }, attr.$observe("required", function() {
-                    ctrl.$validate();
-                }));
-            }
-        };
-    }, patternDirective = function() {
+    } ], requiredDirective = [ "$parse", function($parse) {
         return {
             restrict: "A",
             require: "?ngModel",
             link: function(scope, elm, attr, ctrl) {
                 if (ctrl) {
-                    var regexp, patternExp = attr.ngPattern || attr.pattern;
-                    attr.$observe("pattern", function(regex) {
-                        if (isString(regex) && regex.length > 0 && (regex = new RegExp("^" + regex + "$")), 
-                        regex && !regex.test) throw minErr("ngPattern")("noregexp", "Expected {0} to be a RegExp but was {1}. Element: {2}", patternExp, regex, startingTag(elm));
-                        regexp = regex || void 0, ctrl.$validate();
-                    }), ctrl.$validators.pattern = function(modelValue, viewValue) {
-                        return ctrl.$isEmpty(viewValue) || isUndefined(regexp) || regexp.test(viewValue);
-                    };
+                    var value = attr.hasOwnProperty("required") || $parse(attr.ngRequired)(scope);
+                    attr.ngRequired || (attr.required = !0), ctrl.$validators.required = function(modelValue, viewValue) {
+                        return !value || !ctrl.$isEmpty(viewValue);
+                    }, attr.$observe("required", function(newVal) {
+                        value !== newVal && (value = newVal, ctrl.$validate());
+                    });
                 }
             }
         };
-    }, maxlengthDirective = function() {
+    } ], patternDirective = [ "$parse", function($parse) {
+        return {
+            restrict: "A",
+            require: "?ngModel",
+            compile: function(tElm, tAttr) {
+                var patternExp, parseFn;
+                return tAttr.ngPattern && (patternExp = tAttr.ngPattern, parseFn = "/" === tAttr.ngPattern.charAt(0) && REGEX_STRING_REGEXP.test(tAttr.ngPattern) ? function() {
+                    return tAttr.ngPattern;
+                } : $parse(tAttr.ngPattern)), function(scope, elm, attr, ctrl) {
+                    if (ctrl) {
+                        var attrVal = attr.pattern;
+                        attr.ngPattern ? attrVal = parseFn(scope) : patternExp = attr.pattern;
+                        var regexp = parsePatternAttr(attrVal, patternExp, elm);
+                        attr.$observe("pattern", function(newVal) {
+                            var oldRegexp = regexp;
+                            regexp = parsePatternAttr(newVal, patternExp, elm), (oldRegexp && oldRegexp.toString()) !== (regexp && regexp.toString()) && ctrl.$validate();
+                        }), ctrl.$validators.pattern = function(modelValue, viewValue) {
+                            return ctrl.$isEmpty(viewValue) || isUndefined(regexp) || regexp.test(viewValue);
+                        };
+                    }
+                };
+            }
+        };
+    } ], maxlengthDirective = [ "$parse", function($parse) {
         return {
             restrict: "A",
             require: "?ngModel",
             link: function(scope, elm, attr, ctrl) {
                 if (ctrl) {
-                    var maxlength = -1;
+                    var maxlength = attr.maxlength || $parse(attr.ngMaxlength)(scope), maxlengthParsed = parseLength(maxlength);
                     attr.$observe("maxlength", function(value) {
-                        var intVal = toInt(value);
-                        maxlength = isNumberNaN(intVal) ? -1 : intVal, ctrl.$validate();
+                        maxlength !== value && (maxlengthParsed = parseLength(value), maxlength = value, 
+                        ctrl.$validate());
                     }), ctrl.$validators.maxlength = function(modelValue, viewValue) {
-                        return 0 > maxlength || ctrl.$isEmpty(viewValue) || viewValue.length <= maxlength;
+                        return 0 > maxlengthParsed || ctrl.$isEmpty(viewValue) || viewValue.length <= maxlengthParsed;
                     };
                 }
             }
         };
-    }, minlengthDirective = function() {
+    } ], minlengthDirective = [ "$parse", function($parse) {
         return {
             restrict: "A",
             require: "?ngModel",
             link: function(scope, elm, attr, ctrl) {
                 if (ctrl) {
-                    var minlength = 0;
+                    var minlength = attr.minlength || $parse(attr.ngMinlength)(scope), minlengthParsed = parseLength(minlength) || -1;
                     attr.$observe("minlength", function(value) {
-                        minlength = toInt(value) || 0, ctrl.$validate();
+                        minlength !== value && (minlengthParsed = parseLength(value) || -1, minlength = value, 
+                        ctrl.$validate());
                     }), ctrl.$validators.minlength = function(modelValue, viewValue) {
-                        return ctrl.$isEmpty(viewValue) || viewValue.length >= minlength;
+                        return ctrl.$isEmpty(viewValue) || viewValue.length >= minlengthParsed;
                     };
                 }
             }
         };
-    };
+    } ];
     return window.angular.bootstrap ? void (window.console && console.log("WARNING: Tried to load AngularJS more than once.")) : (bindJQuery(), 
     publishExternalAPI(angular), angular.module("ngLocale", [], [ "$provide", function($provide) {
         function getDecimals(n) {
@@ -10878,7 +11250,7 @@
     } ]), void jqLite(function() {
         angularInit(window.document, bootstrap);
     }));
-}(window), !window.angular.$$csp().noInlineStyle && window.angular.element(document.head).prepend('<style type="text/css">@charset "UTF-8";[ng\\:cloak],[ng-cloak],[data-ng-cloak],[x-ng-cloak],.ng-cloak,.x-ng-cloak,.ng-hide:not(.ng-hide-animate){display:none !important;}ng\\:form{display:block;}.ng-animate-shim{visibility:hidden;}.ng-anchor{position:absolute;}</style>'), 
+}(window), !window.angular.$$csp().noInlineStyle && window.angular.element(document.head).prepend(window.angular.element("<style>").text('@charset "UTF-8";[ng\\:cloak],[ng-cloak],[data-ng-cloak],[x-ng-cloak],.ng-cloak,.x-ng-cloak,.ng-hide:not(.ng-hide-animate){display:none !important;}ng\\:form{display:block;}.ng-animate-shim{visibility:hidden;}.ng-anchor{position:absolute;}')), 
 function(window, angular) {
     "use strict";
     function assertArg(arg, name, reason) {
@@ -11000,7 +11372,7 @@ function(window, angular) {
     function getDomNode(element) {
         return element instanceof jqLite ? element[0] : element;
     }
-    function applyGeneratedPreparationClasses(element, event, options) {
+    function applyGeneratedPreparationClasses($$jqLite, element, event, options) {
         var classes = "";
         event && (classes = pendClasses(event, EVENT_CLASS_PREFIX, !0)), options.addClass && (classes = concatWithSpace(classes, pendClasses(options.addClass, ADD_CLASS_SUFFIX))), 
         options.removeClass && (classes = concatWithSpace(classes, pendClasses(options.removeClass, REMOVE_CLASS_SUFFIX))), 
@@ -11010,10 +11382,6 @@ function(window, angular) {
         options.preparationClasses && (element.removeClass(options.preparationClasses), 
         options.preparationClasses = null), options.activeClasses && (element.removeClass(options.activeClasses), 
         options.activeClasses = null);
-    }
-    function blockTransitions(node, duration) {
-        var value = duration ? "-" + duration + "s" : "";
-        return applyInlineStyle(node, [ TRANSITION_DELAY_PROP, value ]), [ TRANSITION_DELAY_PROP, value ];
     }
     function blockKeyframeAnimations(node, applyBlock) {
         var value = applyBlock ? "paused" : "", key = ANIMATION_PROP + ANIMATION_PLAYSTATE_KEY;
@@ -11058,28 +11426,6 @@ function(window, angular) {
         var style = TRANSITION_PROP, value = duration + "s";
         return applyOnlyDuration ? style += DURATION_KEY : value += " linear all", [ style, value ];
     }
-    function createLocalCacheLookup() {
-        var cache = Object.create(null);
-        return {
-            flush: function() {
-                cache = Object.create(null);
-            },
-            count: function(key) {
-                var entry = cache[key];
-                return entry ? entry.total : 0;
-            },
-            get: function(key) {
-                var entry = cache[key];
-                return entry && entry.value;
-            },
-            put: function(key, value) {
-                cache[key] ? cache[key].total++ : cache[key] = {
-                    total: 1,
-                    value: value
-                };
-            }
-        };
-    }
     function registerRestorableStyles(backup, node, properties) {
         forEach(properties, function(prop) {
             backup[prop] = isDefined(backup[prop]) ? backup[prop] : node.style.getPropertyValue(prop);
@@ -11091,7 +11437,12 @@ function(window, angular) {
     TRANSITIONEND_EVENT = "transitionend"), void 0 === window.onanimationend && void 0 !== window.onwebkitanimationend ? (CSS_PREFIX = "-webkit-", 
     ANIMATION_PROP = "WebkitAnimation", ANIMATIONEND_EVENT = "webkitAnimationEnd animationend") : (ANIMATION_PROP = "animation", 
     ANIMATIONEND_EVENT = "animationend");
-    var copy, extend, forEach, isArray, isDefined, isElement, isFunction, isObject, isString, isUndefined, jqLite, noop, DURATION_KEY = "Duration", PROPERTY_KEY = "Property", DELAY_KEY = "Delay", TIMING_KEY = "TimingFunction", ANIMATION_ITERATION_COUNT_KEY = "IterationCount", ANIMATION_PLAYSTATE_KEY = "PlayState", SAFE_FAST_FORWARD_DURATION_VALUE = 9999, ANIMATION_DELAY_PROP = ANIMATION_PROP + DELAY_KEY, ANIMATION_DURATION_PROP = ANIMATION_PROP + DURATION_KEY, TRANSITION_DELAY_PROP = TRANSITION_PROP + DELAY_KEY, TRANSITION_DURATION_PROP = TRANSITION_PROP + DURATION_KEY, ngMinErr = angular.$$minErr("ng"), $$rAFSchedulerFactory = [ "$$rAF", function($$rAF) {
+    var copy, extend, forEach, isArray, isDefined, isElement, isFunction, isObject, isString, isUndefined, jqLite, noop, DURATION_KEY = "Duration", PROPERTY_KEY = "Property", DELAY_KEY = "Delay", TIMING_KEY = "TimingFunction", ANIMATION_ITERATION_COUNT_KEY = "IterationCount", ANIMATION_PLAYSTATE_KEY = "PlayState", SAFE_FAST_FORWARD_DURATION_VALUE = 9999, ANIMATION_DELAY_PROP = ANIMATION_PROP + DELAY_KEY, ANIMATION_DURATION_PROP = ANIMATION_PROP + DURATION_KEY, TRANSITION_DELAY_PROP = TRANSITION_PROP + DELAY_KEY, TRANSITION_DURATION_PROP = TRANSITION_PROP + DURATION_KEY, ngMinErr = angular.$$minErr("ng"), helpers = {
+        blockTransitions: function(node, duration) {
+            var value = duration ? "-" + duration + "s" : "";
+            return applyInlineStyle(node, [ TRANSITION_DELAY_PROP, value ]), [ TRANSITION_DELAY_PROP, value ];
+        }
+    }, $$rAFSchedulerFactory = [ "$$rAF", function($$rAF) {
         function scheduler(tasks) {
             queue = queue.concat(tasks), nextTick();
         }
@@ -11133,41 +11484,37 @@ function(window, angular) {
         animationDuration: ANIMATION_DURATION_PROP,
         animationDelay: ANIMATION_DELAY_PROP
     }, $AnimateCssProvider = [ "$animateProvider", function($animateProvider) {
-        var gcsLookup = createLocalCacheLookup(), gcsStaggerLookup = createLocalCacheLookup();
-        this.$get = [ "$window", "$$jqLite", "$$AnimateRunner", "$timeout", "$$forceReflow", "$sniffer", "$$rAFScheduler", "$$animateQueue", function($window, $$jqLite, $$AnimateRunner, $timeout, $$forceReflow, $sniffer, $$rAFScheduler, $$animateQueue) {
-            function gcsHashFn(node, extraClasses) {
-                var KEY = "$$ngAnimateParentKey", parentNode = node.parentNode, parentID = parentNode[KEY] || (parentNode[KEY] = ++parentCounter);
-                return parentID + "-" + node.getAttribute("class") + "-" + extraClasses;
-            }
-            function computeCachedCssStyles(node, className, cacheKey, properties) {
-                var timings = gcsLookup.get(cacheKey);
-                return timings || (timings = computeCssStyles($window, node, properties), "infinite" === timings.animationIterationCount && (timings.animationIterationCount = 1)), 
-                gcsLookup.put(cacheKey, timings), timings;
+        this.$get = [ "$window", "$$jqLite", "$$AnimateRunner", "$timeout", "$$animateCache", "$$forceReflow", "$sniffer", "$$rAFScheduler", "$$animateQueue", function($window, $$jqLite, $$AnimateRunner, $timeout, $$animateCache, $$forceReflow, $sniffer, $$rAFScheduler, $$animateQueue) {
+            function computeCachedCssStyles(node, className, cacheKey, allowNoDuration, properties) {
+                var timings = $$animateCache.get(cacheKey);
+                timings || (timings = computeCssStyles($window, node, properties), "infinite" === timings.animationIterationCount && (timings.animationIterationCount = 1));
+                var hasDuration = allowNoDuration || timings.transitionDuration > 0 || timings.animationDuration > 0;
+                return $$animateCache.put(cacheKey, timings, hasDuration), timings;
             }
             function computeCachedCssStaggerStyles(node, className, cacheKey, properties) {
-                var stagger;
-                if (gcsLookup.count(cacheKey) > 0 && (stagger = gcsStaggerLookup.get(cacheKey), 
+                var stagger, staggerCacheKey = "stagger-" + cacheKey;
+                if ($$animateCache.count(cacheKey) > 0 && (stagger = $$animateCache.get(staggerCacheKey), 
                 !stagger)) {
                     var staggerClassName = pendClasses(className, "-stagger");
                     $$jqLite.addClass(node, staggerClassName), stagger = computeCssStyles($window, node, properties), 
                     stagger.animationDuration = Math.max(stagger.animationDuration, 0), stagger.transitionDuration = Math.max(stagger.transitionDuration, 0), 
-                    $$jqLite.removeClass(node, staggerClassName), gcsStaggerLookup.put(cacheKey, stagger);
+                    $$jqLite.removeClass(node, staggerClassName), $$animateCache.put(staggerCacheKey, stagger, !0);
                 }
                 return stagger || {};
             }
             function waitUntilQuiet(callback) {
                 rafWaitQueue.push(callback), $$rAFScheduler.waitUntilQuiet(function() {
-                    gcsLookup.flush(), gcsStaggerLookup.flush();
+                    $$animateCache.flush();
                     for (var pageWidth = $$forceReflow(), i = 0; i < rafWaitQueue.length; i++) rafWaitQueue[i](pageWidth);
                     rafWaitQueue.length = 0;
                 });
             }
-            function computeTimings(node, className, cacheKey) {
-                var timings = computeCachedCssStyles(node, className, cacheKey, DETECT_CSS_PROPERTIES), aD = timings.animationDelay, tD = timings.transitionDelay;
+            function computeTimings(node, className, cacheKey, allowNoDuration) {
+                var timings = computeCachedCssStyles(node, className, cacheKey, allowNoDuration, DETECT_CSS_PROPERTIES), aD = timings.animationDelay, tD = timings.transitionDelay;
                 return timings.maxDelay = aD && tD ? Math.max(aD, tD) : aD || tD, timings.maxDuration = Math.max(timings.animationDuration * timings.animationIterationCount, timings.transitionDuration), 
                 timings;
             }
-            var applyAnimationClasses = applyAnimationClassesFactory($$jqLite), parentCounter = 0, rafWaitQueue = [];
+            var applyAnimationClasses = applyAnimationClassesFactory($$jqLite), rafWaitQueue = [];
             return function(element, initialOptions) {
                 function endFn() {
                     close();
@@ -11177,9 +11524,9 @@ function(window, angular) {
                 }
                 function close(rejected) {
                     if (!(animationClosed || animationCompleted && animationPaused)) {
-                        animationClosed = !0, animationPaused = !1, options.$$skipPreparationClasses || $$jqLite.removeClass(element, preparationClasses), 
-                        $$jqLite.removeClass(element, activeClasses), blockKeyframeAnimations(node, !1), 
-                        blockTransitions(node, !1), forEach(temporaryStyles, function(entry) {
+                        animationClosed = !0, animationPaused = !1, preparationClasses && !options.$$skipPreparationClasses && $$jqLite.removeClass(element, preparationClasses), 
+                        activeClasses && $$jqLite.removeClass(element, activeClasses), blockKeyframeAnimations(node, !1), 
+                        helpers.blockTransitions(node, !1), forEach(temporaryStyles, function(entry) {
                             node.style[entry[0]] = "";
                         }), applyAnimationClasses(element, options), applyAnimationStyles(element, options), 
                         Object.keys(restoreStyles).length && forEach(restoreStyles, function(value, prop) {
@@ -11191,7 +11538,7 @@ function(window, angular) {
                     }
                 }
                 function applyBlocking(duration) {
-                    flags.blockTransition && blockTransitions(node, duration), flags.blockKeyframeAnimation && blockKeyframeAnimations(node, !!duration);
+                    flags.blockTransition && helpers.blockTransitions(node, duration), flags.blockKeyframeAnimation && blockKeyframeAnimations(node, !!duration);
                 }
                 function closeAndReturnNoopAnimator() {
                     return runner = new $$AnimateRunner({
@@ -11222,8 +11569,8 @@ function(window, angular) {
                                 node.style[key] = value;
                             }), applyAnimationClasses(element, options), $$jqLite.addClass(element, activeClasses), 
                             flags.recalculateTimingStyles) {
-                                if (fullClassName = node.getAttribute("class") + " " + preparationClasses, cacheKey = gcsHashFn(node, fullClassName), 
-                                timings = computeTimings(node, fullClassName, cacheKey), relativeDelay = timings.maxDelay, 
+                                if (fullClassName = node.getAttribute("class") + " " + preparationClasses, cacheKey = $$animateCache.cacheKey(node, method, options.addClass, options.removeClass), 
+                                timings = computeTimings(node, fullClassName, cacheKey, !1), relativeDelay = timings.maxDelay, 
                                 maxDelay = Math.max(relativeDelay, 0), maxDuration = timings.maxDuration, 0 === maxDuration) return void close();
                                 flags.hasTransitions = timings.transitionDuration > 0, flags.hasAnimations = timings.animationDuration > 0;
                             }
@@ -11289,9 +11636,11 @@ function(window, angular) {
                 options.addClass && (addRemoveClassName += pendClasses(options.addClass, ADD_CLASS_SUFFIX)), 
                 options.removeClass && (addRemoveClassName.length && (addRemoveClassName += " "), 
                 addRemoveClassName += pendClasses(options.removeClass, REMOVE_CLASS_SUFFIX)), options.applyClassesEarly && addRemoveClassName.length && applyAnimationClasses(element, options);
-                var preparationClasses = [ structuralClassName, addRemoveClassName ].join(" ").trim(), fullClassName = classes + " " + preparationClasses, activeClasses = pendClasses(preparationClasses, ACTIVE_CLASS_SUFFIX), hasToStyles = styles.to && Object.keys(styles.to).length > 0, containsKeyframeAnimation = (options.keyframeStyle || "").length > 0;
+                var preparationClasses = [ structuralClassName, addRemoveClassName ].join(" ").trim(), fullClassName = classes + " " + preparationClasses, hasToStyles = styles.to && Object.keys(styles.to).length > 0, containsKeyframeAnimation = (options.keyframeStyle || "").length > 0;
                 if (!containsKeyframeAnimation && !hasToStyles && !preparationClasses) return closeAndReturnNoopAnimator();
-                var cacheKey, stagger;
+                var stagger, cacheKey = $$animateCache.cacheKey(node, method, options.addClass, options.removeClass);
+                if ($$animateCache.containsCachedAnimationWithoutDuration(cacheKey)) return preparationClasses = null, 
+                closeAndReturnNoopAnimator();
                 if (options.stagger > 0) {
                     var staggerVal = parseFloat(options.stagger);
                     stagger = {
@@ -11300,7 +11649,7 @@ function(window, angular) {
                         transitionDuration: 0,
                         animationDuration: 0
                     };
-                } else cacheKey = gcsHashFn(node, fullClassName), stagger = computeCachedCssStaggerStyles(node, preparationClasses, cacheKey, DETECT_STAGGER_CSS_PROPERTIES);
+                } else stagger = computeCachedCssStaggerStyles(node, preparationClasses, cacheKey, DETECT_STAGGER_CSS_PROPERTIES);
                 options.$$skipPreparationClasses || $$jqLite.addClass(element, preparationClasses);
                 var applyOnlyDuration;
                 if (options.transitionStyle) {
@@ -11316,9 +11665,9 @@ function(window, angular) {
                     var keyframeStyle = [ ANIMATION_PROP, options.keyframeStyle ];
                     applyInlineStyle(node, keyframeStyle), temporaryStyles.push(keyframeStyle);
                 }
-                var itemIndex = stagger ? options.staggerIndex >= 0 ? options.staggerIndex : gcsLookup.count(cacheKey) : 0, isFirst = 0 === itemIndex;
-                isFirst && !options.skipBlocking && blockTransitions(node, SAFE_FAST_FORWARD_DURATION_VALUE);
-                var timings = computeTimings(node, fullClassName, cacheKey), relativeDelay = timings.maxDelay;
+                var itemIndex = stagger ? options.staggerIndex >= 0 ? options.staggerIndex : $$animateCache.count(cacheKey) : 0, isFirst = 0 === itemIndex;
+                isFirst && !options.skipBlocking && helpers.blockTransitions(node, SAFE_FAST_FORWARD_DURATION_VALUE);
+                var timings = computeTimings(node, fullClassName, cacheKey, !isStructural), relativeDelay = timings.maxDelay;
                 maxDelay = Math.max(relativeDelay, 0), maxDuration = timings.maxDuration;
                 var flags = {};
                 if (flags.hasTransitions = timings.transitionDuration > 0, flags.hasAnimations = timings.animationDuration > 0, 
@@ -11331,6 +11680,7 @@ function(window, angular) {
                 applyOnlyDuration = node.style[TRANSITION_PROP + PROPERTY_KEY].length > 0, temporaryStyles.push(getCssTransitionDurationStyle(maxDuration, applyOnlyDuration))), 
                 flags.applyAnimationDuration && (flags.hasAnimations = !0, timings.animationDuration = maxDuration, 
                 temporaryStyles.push(getCssKeyframeDurationStyle(maxDuration)))), 0 === maxDuration && !flags.recalculateTimingStyles) return closeAndReturnNoopAnimator();
+                var activeClasses = pendClasses(preparationClasses, ACTIVE_CLASS_SUFFIX);
                 if (null != options.delay) {
                     var delayStyle;
                     "boolean" != typeof options.delay && (delayStyle = parseFloat(options.delay), maxDelay = Math.max(delayStyle, 0)), 
@@ -11342,7 +11692,7 @@ function(window, angular) {
                 options.skipBlocking || (flags.blockTransition = timings.transitionDuration > 0, 
                 flags.blockKeyframeAnimation = timings.animationDuration > 0 && stagger.animationDelay > 0 && 0 === stagger.animationDuration), 
                 options.from && (options.cleanupStyles && registerRestorableStyles(restoreStyles, node, Object.keys(options.from)), 
-                applyAnimationFromStyles(element, options)), flags.blockTransition || flags.blockKeyframeAnimation ? applyBlocking(maxDuration) : options.skipBlocking || blockTransitions(node, !1), 
+                applyAnimationFromStyles(element, options)), flags.blockTransition || flags.blockKeyframeAnimation ? applyBlocking(maxDuration) : options.skipBlocking || helpers.blockTransitions(node, !1), 
                 {
                     $$willAnimate: !0,
                     end: endFn,
@@ -11649,6 +11999,14 @@ function(window, angular) {
             };
         } ];
     } ], NG_ANIMATE_ATTR_NAME = "data-ng-animate", NG_ANIMATE_PIN_DATA = "$ngAnimatePin", $$AnimateQueueProvider = [ "$animateProvider", function($animateProvider) {
+        function getEventData(options) {
+            return {
+                addClass: options.addClass,
+                removeClass: options.removeClass,
+                from: options.from,
+                to: options.to
+            };
+        }
         function makeTruthyCssClassMap(classString) {
             if (!classString) return null;
             var keys = classString.split(ONE_SPACE), map = Object.create(null);
@@ -11695,6 +12053,9 @@ function(window, angular) {
             var nA = newAnimation.addClass, nR = newAnimation.removeClass, cA = currentAnimation.addClass, cR = currentAnimation.removeClass;
             return isUndefined(nA) && isUndefined(nR) || isUndefined(cA) && isUndefined(cR) ? !1 : hasMatchingClasses(nA, cR) || hasMatchingClasses(nR, cA);
         }), this.$get = [ "$$rAF", "$rootScope", "$rootElement", "$document", "$$Map", "$$animation", "$$AnimateRunner", "$templateRequest", "$$jqLite", "$$forceReflow", "$$isDocumentHidden", function($$rAF, $rootScope, $rootElement, $document, $$Map, $$animation, $$AnimateRunner, $templateRequest, $$jqLite, $$forceReflow, $$isDocumentHidden) {
+            function removeFromDisabledElementsLookup(evt) {
+                disabledElementsLookup["delete"](evt.target);
+            }
             function postDigestTaskFactory() {
                 var postDigestCalled = !1;
                 return function(fn) {
@@ -11748,8 +12109,9 @@ function(window, angular) {
                 runner;
                 var isStructural = [ "enter", "move", "leave" ].indexOf(event) >= 0, documentHidden = $$isDocumentHidden(), skipAnimations = documentHidden || disabledElementsLookup.get(node), existingAnimation = !skipAnimations && activeAnimationsLookup.get(node) || {}, hasExistingAnimation = !!existingAnimation.state;
                 if (skipAnimations || hasExistingAnimation && existingAnimation.state === PRE_DIGEST_STATE || (skipAnimations = !areAnimationsAllowed(node, parentNode, event)), 
-                skipAnimations) return documentHidden && notifyProgress(runner, event, "start"), 
-                close(), documentHidden && notifyProgress(runner, event, "close"), runner;
+                skipAnimations) return documentHidden && notifyProgress(runner, event, "start", getEventData(options)), 
+                close(), documentHidden && notifyProgress(runner, event, "close", getEventData(options)), 
+                runner;
                 isStructural && closeChildAnimations(node);
                 var newAnimation = {
                     structural: isStructural,
@@ -11773,7 +12135,7 @@ function(window, angular) {
                     } else {
                         var joinAnimationFlag = isAllowed("join", newAnimation, existingAnimation);
                         if (joinAnimationFlag) {
-                            if (existingAnimation.state !== RUNNING_STATE) return applyGeneratedPreparationClasses(element, isStructural ? event : null, options), 
+                            if (existingAnimation.state !== RUNNING_STATE) return applyGeneratedPreparationClasses($$jqLite, element, isStructural ? event : null, options), 
                             event = newAnimation.event = existingAnimation.event, options = mergeAnimationDetails(element, existingAnimation, newAnimation), 
                             existingAnimation.runner;
                             normalizeAnimationDetails(element, newAnimation);
@@ -11796,11 +12158,12 @@ function(window, angular) {
                     event = !animationDetails.structural && hasAnimationClasses(animationDetails, !0) ? "setClass" : animationDetails.event, 
                     markElementAnimationState(node, RUNNING_STATE);
                     var realRunner = $$animation(element, event, animationDetails.options);
-                    runner.setHost(realRunner), notifyProgress(runner, event, "start", {}), realRunner.done(function(status) {
+                    runner.setHost(realRunner), notifyProgress(runner, event, "start", getEventData(options)), 
+                    realRunner.done(function(status) {
                         close(!status);
                         var animationDetails = activeAnimationsLookup.get(node);
                         animationDetails && animationDetails.counter === counter && clearElementAnimationState(node), 
-                        notifyProgress(runner, event, "close", {});
+                        notifyProgress(runner, event, "close", getEventData(options));
                     });
                 }), runner;
             }
@@ -11897,7 +12260,8 @@ function(window, angular) {
                         var hasElement = isElement(element);
                         if (hasElement) {
                             var node = getDomNode(element);
-                            1 === argCount ? bool = !disabledElementsLookup.get(node) : disabledElementsLookup.set(node, !bool);
+                            1 === argCount ? bool = !disabledElementsLookup.get(node) : (disabledElementsLookup.has(node) || jqLite(element).on("$destroy", removeFromDisabledElementsLookup), 
+                            disabledElementsLookup.set(node, !bool));
                         } else bool = animationsEnabled = !!element;
                     }
                     return bool;
@@ -11905,7 +12269,40 @@ function(window, angular) {
             };
             return $animate;
         } ];
-    } ], $$AnimationProvider = [ "$animateProvider", function($animateProvider) {
+    } ], $$AnimateCacheProvider = function() {
+        var KEY = "$$ngAnimateParentKey", parentCounter = 0, cache = Object.create(null);
+        this.$get = [ function() {
+            return {
+                cacheKey: function(node, method, addClass, removeClass) {
+                    var parentNode = node.parentNode, parentID = parentNode[KEY] || (parentNode[KEY] = ++parentCounter), parts = [ parentID, method, node.getAttribute("class") ];
+                    return addClass && parts.push(addClass), removeClass && parts.push(removeClass), 
+                    parts.join(" ");
+                },
+                containsCachedAnimationWithoutDuration: function(key) {
+                    var entry = cache[key];
+                    return entry && !entry.isValid || !1;
+                },
+                flush: function() {
+                    cache = Object.create(null);
+                },
+                count: function(key) {
+                    var entry = cache[key];
+                    return entry ? entry.total : 0;
+                },
+                get: function(key) {
+                    var entry = cache[key];
+                    return entry && entry.value;
+                },
+                put: function(key, value, isValid) {
+                    cache[key] ? (cache[key].total++, cache[key].value = value) : cache[key] = {
+                        total: 1,
+                        value: value,
+                        isValid: isValid
+                    };
+                }
+            };
+        } ];
+    }, $$AnimationProvider = [ "$animateProvider", function($animateProvider) {
         function setRunner(element, runner) {
             element.data(RUNNER_STORAGE_KEY, runner);
         }
@@ -11915,8 +12312,8 @@ function(window, angular) {
         function getRunner(element) {
             return element.data(RUNNER_STORAGE_KEY);
         }
-        var NG_ANIMATE_REF_ATTR = "ng-animate-ref", drivers = this.drivers = [], RUNNER_STORAGE_KEY = "$$animationRunner";
-        this.$get = [ "$$jqLite", "$rootScope", "$injector", "$$AnimateRunner", "$$Map", "$$rAFScheduler", function($$jqLite, $rootScope, $injector, $$AnimateRunner, $$Map, $$rAFScheduler) {
+        var NG_ANIMATE_REF_ATTR = "ng-animate-ref", drivers = this.drivers = [], RUNNER_STORAGE_KEY = "$$animationRunner", PREPARE_CLASSES_KEY = "$$animatePrepareClasses";
+        this.$get = [ "$$jqLite", "$rootScope", "$injector", "$$AnimateRunner", "$$Map", "$$rAFScheduler", "$$animateCache", function($$jqLite, $rootScope, $injector, $$AnimateRunner, $$Map, $$rAFScheduler, $$animateCache) {
             function sortAnimations(animations) {
                 function processNode(entry) {
                     if (entry.processed) return entry;
@@ -11939,7 +12336,7 @@ function(window, angular) {
                     for (i = 0; i < queue.length; i++) {
                         var entry = queue[i];
                         0 >= remainingLevelEntries && (remainingLevelEntries = nextLevelEntries, nextLevelEntries = 0, 
-                        result.push(row), row = []), row.push(entry.fn), entry.children.forEach(function(childEntry) {
+                        result.push(row), row = []), row.push(entry), entry.children.forEach(function(childEntry) {
                             nextLevelEntries++, queue.push(childEntry);
                         }), remainingLevelEntries--;
                     }
@@ -11952,6 +12349,7 @@ function(window, angular) {
                     var animation = animations[i];
                     lookup.set(animation.domNode, animations[i] = {
                         domNode: animation.domNode,
+                        element: animation.element,
                         fn: animation.fn,
                         children: []
                     });
@@ -12032,7 +12430,8 @@ function(window, angular) {
                     }
                 }
                 function beforeStart() {
-                    element.addClass(NG_ANIMATE_CLASSNAME), tempClasses && $$jqLite.addClass(element, tempClasses), 
+                    tempClasses = (tempClasses ? tempClasses + " " : "") + NG_ANIMATE_CLASSNAME, $$jqLite.addClass(element, tempClasses);
+                    var prepareClassName = element.data(PREPARE_CLASSES_KEY);
                     prepareClassName && ($$jqLite.removeClass(element, prepareClassName), prepareClassName = null);
                 }
                 function updateAnimationRunners(animation, newRunner) {
@@ -12049,7 +12448,7 @@ function(window, angular) {
                 function close(rejected) {
                     element.off("$destroy", handleDestroyedElement), removeRunner(element), applyAnimationClasses(element, options), 
                     applyAnimationStyles(element, options), options.domOperation(), tempClasses && $$jqLite.removeClass(element, tempClasses), 
-                    element.removeClass(NG_ANIMATE_CLASSNAME), runner.complete(!rejected);
+                    runner.complete(!rejected);
                 }
                 options = prepareAnimationOptions(options);
                 var isStructural = [ "enter", "move", "leave" ].indexOf(event) >= 0, runner = new $$AnimateRunner({
@@ -12061,12 +12460,10 @@ function(window, angular) {
                     }
                 });
                 if (!drivers.length) return close(), runner;
-                setRunner(element, runner);
                 var classes = mergeClasses(element.attr("class"), mergeClasses(options.addClass, options.removeClass)), tempClasses = options.tempClasses;
-                tempClasses && (classes += " " + tempClasses, options.tempClasses = null);
-                var prepareClassName;
-                return isStructural && (prepareClassName = "ng-" + event + PREPARE_CLASS_SUFFIX, 
-                $$jqLite.addClass(element, prepareClassName)), animationQueue.push({
+                return tempClasses && (classes += " " + tempClasses, options.tempClasses = null), 
+                isStructural && element.data(PREPARE_CLASSES_KEY, "ng-" + event + PREPARE_CLASS_SUFFIX), 
+                setRunner(element, runner), animationQueue.push({
                     element: element,
                     classes: classes,
                     event: event,
@@ -12081,11 +12478,17 @@ function(window, angular) {
                     }), animationQueue.length = 0;
                     var groupedAnimations = groupAnimations(animations), toBeSortedAnimations = [];
                     forEach(groupedAnimations, function(animationEntry) {
+                        var element = animationEntry.from ? animationEntry.from.element : animationEntry.element, extraClasses = options.addClass;
+                        extraClasses = (extraClasses ? extraClasses + " " : "") + NG_ANIMATE_CLASSNAME;
+                        var cacheKey = $$animateCache.cacheKey(element[0], animationEntry.event, extraClasses, options.removeClass);
                         toBeSortedAnimations.push({
-                            domNode: getDomNode(animationEntry.from ? animationEntry.from.element : animationEntry.element),
+                            element: element,
+                            domNode: getDomNode(element),
                             fn: function() {
+                                var startAnimationFn, closeFn = animationEntry.close;
+                                if ($$animateCache.containsCachedAnimationWithoutDuration(cacheKey)) return void closeFn();
                                 animationEntry.beforeStart();
-                                var startAnimationFn, closeFn = animationEntry.close, targetElement = animationEntry.anchors ? animationEntry.from.element || animationEntry.to.element : animationEntry.element;
+                                var targetElement = animationEntry.anchors ? animationEntry.from.element || animationEntry.to.element : animationEntry.element;
                                 if (getRunner(targetElement)) {
                                     var operation = invokeFirstDriver(animationEntry);
                                     operation && (startAnimationFn = operation.start);
@@ -12098,24 +12501,31 @@ function(window, angular) {
                                 } else closeFn();
                             }
                         });
-                    }), $$rAFScheduler(sortAnimations(toBeSortedAnimations));
+                    });
+                    for (var finalAnimations = sortAnimations(toBeSortedAnimations), i = 0; i < finalAnimations.length; i++) for (var innerArray = finalAnimations[i], j = 0; j < innerArray.length; j++) {
+                        var entry = innerArray[j], element = entry.element;
+                        if (finalAnimations[i][j] = entry.fn, 0 !== i) {
+                            var prepareClassName = element.data(PREPARE_CLASSES_KEY);
+                            prepareClassName && $$jqLite.addClass(element, prepareClassName);
+                        } else element.removeData(PREPARE_CLASSES_KEY);
+                    }
+                    $$rAFScheduler(finalAnimations);
                 }), runner);
             };
         } ];
-    } ], ngAnimateSwapDirective = [ "$animate", "$rootScope", function($animate, $rootScope) {
+    } ], ngAnimateSwapDirective = [ "$animate", function($animate) {
         return {
             restrict: "A",
             transclude: "element",
             terminal: !0,
-            priority: 600,
+            priority: 550,
             link: function(scope, $element, attrs, ctrl, $transclude) {
                 var previousElement, previousScope;
                 scope.$watchCollection(attrs.ngAnimateSwap || attrs["for"], function(value) {
                     previousElement && $animate.leave(previousElement), previousScope && (previousScope.$destroy(), 
-                    previousScope = null), (value || 0 === value) && (previousScope = scope.$new(), 
-                    $transclude(previousScope, function(element) {
-                        previousElement = element, $animate.enter(element, null, $element);
-                    }));
+                    previousScope = null), (value || 0 === value) && $transclude(function(clone, childScope) {
+                        previousElement = clone, previousScope = childScope, $animate.enter(clone, null, $element);
+                    });
                 });
             }
         };
@@ -12126,8 +12536,8 @@ function(window, angular) {
         isObject = angular.isObject, isUndefined = angular.isUndefined, isDefined = angular.isDefined, 
         isFunction = angular.isFunction, isElement = angular.isElement;
     }).info({
-        angularVersion: "1.6.10"
-    }).directive("ngAnimateSwap", ngAnimateSwapDirective).directive("ngAnimateChildren", $$AnimateChildrenDirective).factory("$$rAFScheduler", $$rAFSchedulerFactory).provider("$$animateQueue", $$AnimateQueueProvider).provider("$$animation", $$AnimationProvider).provider("$animateCss", $AnimateCssProvider).provider("$$animateCssDriver", $$AnimateCssDriverProvider).provider("$$animateJs", $$AnimateJsProvider).provider("$$animateJsDriver", $$AnimateJsDriverProvider);
+        angularVersion: "1.8.2"
+    }).directive("ngAnimateSwap", ngAnimateSwapDirective).directive("ngAnimateChildren", $$AnimateChildrenDirective).factory("$$rAFScheduler", $$rAFSchedulerFactory).provider("$$animateQueue", $$AnimateQueueProvider).provider("$$animateCache", $$AnimateCacheProvider).provider("$$animation", $$AnimationProvider).provider("$animateCss", $AnimateCssProvider).provider("$$animateCssDriver", $$AnimateCssDriverProvider).provider("$$animateJs", $$AnimateJsProvider).provider("$$animateJsDriver", $$AnimateJsDriverProvider);
 }(window, window.angular), function(window, angular) {
     "use strict";
     function isValidDottedPath(path) {
@@ -12150,7 +12560,7 @@ function(window, angular) {
     }
     var $resourceMinErr = angular.$$minErr("$resource"), MEMBER_NAME_REGEX = /^(\.[a-zA-Z_$@][0-9a-zA-Z_$@]*)+$/;
     angular.module("ngResource", [ "ng" ]).info({
-        angularVersion: "1.6.10"
+        angularVersion: "1.8.2"
     }).provider("$resource", function() {
         var PROTOCOL_AND_IPV6_REGEX = /^https?:\/\/\[[^\]]*][^\/]*/, provider = this;
         this.defaults = {
@@ -12204,25 +12614,25 @@ function(window, angular) {
                         function cancelRequest(value) {
                             promise["catch"](noop), null !== timeoutDeferred && timeoutDeferred.resolve(value);
                         }
-                        var data, success, error, params = {};
+                        var data, onSuccess, onError, params = {};
                         switch (arguments.length) {
                           case 4:
-                            error = a4, success = a3;
+                            onError = a4, onSuccess = a3;
 
                           case 3:
                           case 2:
                             if (!isFunction(a2)) {
-                                params = a1, data = a2, success = a3;
+                                params = a1, data = a2, onSuccess = a3;
                                 break;
                             }
                             if (isFunction(a1)) {
-                                success = a1, error = a2;
+                                onSuccess = a1, onError = a2;
                                 break;
                             }
-                            success = a2, error = a3;
+                            onSuccess = a2, onError = a3;
 
                           case 1:
-                            isFunction(a1) ? success = a1 : hasBody ? data = a1 : params = a1;
+                            isFunction(a1) ? onSuccess = a1 : hasBody ? data = a1 : params = a1;
                             break;
 
                           case 0:
@@ -12231,7 +12641,9 @@ function(window, angular) {
                           default:
                             throw $resourceMinErr("badargs", "Expected up to 4 arguments [params, data, success, error], got {0} arguments", arguments.length);
                         }
-                        var timeoutDeferred, numericTimeoutPromise, isInstanceCall = this instanceof Resource, value = isInstanceCall ? data : action.isArray ? [] : new Resource(data), httpConfig = {}, responseInterceptor = action.interceptor && action.interceptor.response || defaultResponseInterceptor, responseErrorInterceptor = action.interceptor && action.interceptor.responseError || void 0, hasError = !!error, hasResponseErrorInterceptor = !!responseErrorInterceptor;
+                        var timeoutDeferred, numericTimeoutPromise, response, isInstanceCall = this instanceof Resource, value = isInstanceCall ? data : action.isArray ? [] : new Resource(data), httpConfig = {}, requestInterceptor = action.interceptor && action.interceptor.request || void 0, requestErrorInterceptor = action.interceptor && action.interceptor.requestError || void 0, responseInterceptor = action.interceptor && action.interceptor.response || defaultResponseInterceptor, responseErrorInterceptor = action.interceptor && action.interceptor.responseError || $q.reject, successCallback = onSuccess ? function(val) {
+                            onSuccess(val, response.headers, response.status, response.statusText);
+                        } : void 0, errorCallback = onError || void 0;
                         forEach(action, function(value, key) {
                             switch (key) {
                               default:
@@ -12245,8 +12657,9 @@ function(window, angular) {
                         }), !isInstanceCall && cancellable && (timeoutDeferred = $q.defer(), httpConfig.timeout = timeoutDeferred.promise, 
                         numericTimeout && (numericTimeoutPromise = $timeout(timeoutDeferred.resolve, numericTimeout))), 
                         hasBody && (httpConfig.data = data), route.setUrlParams(httpConfig, extend({}, extractParams(data, action.params || {}), params), action.url);
-                        var promise = $http(httpConfig).then(function(response) {
-                            var data = response.data;
+                        var promise = $q.resolve(httpConfig).then(requestInterceptor)["catch"](requestErrorInterceptor).then($http);
+                        return promise = promise.then(function(resp) {
+                            var data = resp.data;
                             if (data) {
                                 if (isArray(data) !== !!action.isArray) throw $resourceMinErr("badcfg", "Error in resource configuration for action `{0}`. Expected response to contain an {1} but got an {2} (Request: {3} {4})", name, action.isArray ? "array" : "object", isArray(data) ? "array" : "object", httpConfig.method, httpConfig.url);
                                 if (action.isArray) value.length = 0, forEach(data, function(item) {
@@ -12256,22 +12669,14 @@ function(window, angular) {
                                     shallowClearAndCopy(data, value), value.$promise = promise;
                                 }
                             }
-                            return response.resource = value, response;
-                        }, function(response) {
-                            return response.resource = value, $q.reject(response);
-                        });
-                        return promise = promise["finally"](function() {
+                            return resp.resource = value, response = resp, responseInterceptor(resp);
+                        }, function(rejectionOrResponse) {
+                            return rejectionOrResponse.resource = value, response = rejectionOrResponse, responseErrorInterceptor(rejectionOrResponse);
+                        }), promise = promise["finally"](function() {
                             value.$resolved = !0, !isInstanceCall && cancellable && (value.$cancelRequest = noop, 
                             $timeout.cancel(numericTimeoutPromise), timeoutDeferred = numericTimeoutPromise = httpConfig.timeout = null);
-                        }), promise = promise.then(function(response) {
-                            var value = responseInterceptor(response);
-                            return (success || noop)(value, response.headers, response.status, response.statusText), 
-                            value;
-                        }, hasError || hasResponseErrorInterceptor ? function(response) {
-                            return hasError && !hasResponseErrorInterceptor && promise["catch"](noop), hasError && error(response), 
-                            hasResponseErrorInterceptor ? responseErrorInterceptor(response) : $q.reject(response);
-                        } : void 0), isInstanceCall ? promise : (value.$promise = promise, value.$resolved = !1, 
-                        cancellable && (value.$cancelRequest = cancelRequest), value);
+                        }), promise.then(successCallback, errorCallback), isInstanceCall ? promise : (value.$promise = promise, 
+                        value.$resolved = !1, cancellable && (value.$cancelRequest = cancelRequest), value);
                     }, Resource.prototype["$" + name] = function(params, success, error) {
                         isFunction(params) && (error = success, success = params, params = {});
                         var result = Resource[name].call(this, params, this, success, error);
@@ -12309,32 +12714,6 @@ function(window, angular) {
     });
 }(window, window.angular), function(window, angular) {
     "use strict";
-    function nodeName_(element) {
-        return angular.lowercase(element.nodeName || element[0] && element[0].nodeName);
-    }
-    function $TouchProvider($provide, $compileProvider) {
-        var ngClickOverrideEnabled = !1, ngClickDirectiveAdded = !1;
-        this.ngClickOverrideEnabled = function(enabled) {
-            return angular.isDefined(enabled) ? (enabled && !ngClickDirectiveAdded && (ngClickDirectiveAdded = !0, 
-            ngTouchClickDirectiveFactory.$$moduleName = "ngTouch", $compileProvider.directive("ngClick", ngTouchClickDirectiveFactory), 
-            $provide.decorator("ngClickDirective", [ "$delegate", function($delegate) {
-                if (ngClickOverrideEnabled) $delegate.shift(); else for (var i = $delegate.length - 1; i >= 0; ) {
-                    if ("ngTouch" === $delegate[i].$$moduleName) {
-                        $delegate.splice(i, 1);
-                        break;
-                    }
-                    i--;
-                }
-                return $delegate;
-            } ])), ngClickOverrideEnabled = enabled, this) : ngClickOverrideEnabled;
-        }, this.$get = function() {
-            return {
-                ngClickOverrideEnabled: function() {
-                    return ngClickOverrideEnabled;
-                }
-            };
-        };
-    }
     function makeSwipeDirective(directiveName, direction, eventName) {
         ngTouch.directive(directiveName, [ "$parse", "$swipe", function($parse, $swipe) {
             var MAX_VERTICAL_DISTANCE = 75, MAX_VERTICAL_RATIO = .3, MIN_HORIZONTAL_DISTANCE = 30;
@@ -12365,9 +12744,8 @@ function(window, angular) {
     }
     var ngTouch = angular.module("ngTouch", []);
     ngTouch.info({
-        angularVersion: "1.6.10"
-    }), ngTouch.provider("$touch", $TouchProvider), $TouchProvider.$inject = [ "$provide", "$compileProvider" ], 
-    ngTouch.factory("$swipe", [ function() {
+        angularVersion: "1.8.2"
+    }), ngTouch.factory("$swipe", [ function() {
         function getCoordinates(event) {
             var originalEvent = event.originalEvent || event, touches = originalEvent.touches && originalEvent.touches.length ? originalEvent.touches : [ originalEvent ], e = originalEvent.changedTouches && originalEvent.changedTouches[0] || touches[0];
             return {
@@ -12424,66 +12802,7 @@ function(window, angular) {
                 });
             }
         };
-    } ]);
-    var ngTouchClickDirectiveFactory = [ "$parse", "$timeout", "$rootElement", function($parse, $timeout, $rootElement) {
-        function hit(x1, y1, x2, y2) {
-            return Math.abs(x1 - x2) < CLICKBUSTER_THRESHOLD && Math.abs(y1 - y2) < CLICKBUSTER_THRESHOLD;
-        }
-        function checkAllowableRegions(touchCoordinates, x, y) {
-            for (var i = 0; i < touchCoordinates.length; i += 2) if (hit(touchCoordinates[i], touchCoordinates[i + 1], x, y)) return touchCoordinates.splice(i, i + 2), 
-            !0;
-            return !1;
-        }
-        function onClick(event) {
-            if (!(Date.now() - lastPreventedTime > PREVENT_DURATION)) {
-                var touches = event.touches && event.touches.length ? event.touches : [ event ], x = touches[0].clientX, y = touches[0].clientY;
-                1 > x && 1 > y || lastLabelClickCoordinates && lastLabelClickCoordinates[0] === x && lastLabelClickCoordinates[1] === y || (lastLabelClickCoordinates && (lastLabelClickCoordinates = null), 
-                "label" === nodeName_(event.target) && (lastLabelClickCoordinates = [ x, y ]), checkAllowableRegions(touchCoordinates, x, y) || (event.stopPropagation(), 
-                event.preventDefault(), event.target && event.target.blur && event.target.blur()));
-            }
-        }
-        function onTouchStart(event) {
-            var touches = event.touches && event.touches.length ? event.touches : [ event ], x = touches[0].clientX, y = touches[0].clientY;
-            touchCoordinates.push(x, y), $timeout(function() {
-                for (var i = 0; i < touchCoordinates.length; i += 2) if (touchCoordinates[i] === x && touchCoordinates[i + 1] === y) return void touchCoordinates.splice(i, i + 2);
-            }, PREVENT_DURATION, !1);
-        }
-        function preventGhostClick(x, y) {
-            touchCoordinates || ($rootElement[0].addEventListener("click", onClick, !0), $rootElement[0].addEventListener("touchstart", onTouchStart, !0), 
-            touchCoordinates = []), lastPreventedTime = Date.now(), checkAllowableRegions(touchCoordinates, x, y);
-        }
-        var lastPreventedTime, touchCoordinates, lastLabelClickCoordinates, TAP_DURATION = 750, MOVE_TOLERANCE = 12, PREVENT_DURATION = 2500, CLICKBUSTER_THRESHOLD = 25, ACTIVE_CLASS_NAME = "ng-click-active";
-        return function(scope, element, attr) {
-            function resetState() {
-                tapping = !1, element.removeClass(ACTIVE_CLASS_NAME);
-            }
-            var tapElement, startTime, touchStartX, touchStartY, clickHandler = $parse(attr.ngClick), tapping = !1;
-            element.on("touchstart", function(event) {
-                tapping = !0, tapElement = event.target ? event.target : event.srcElement, 3 === tapElement.nodeType && (tapElement = tapElement.parentNode), 
-                element.addClass(ACTIVE_CLASS_NAME), startTime = Date.now();
-                var originalEvent = event.originalEvent || event, touches = originalEvent.touches && originalEvent.touches.length ? originalEvent.touches : [ originalEvent ], e = touches[0];
-                touchStartX = e.clientX, touchStartY = e.clientY;
-            }), element.on("touchcancel", function(event) {
-                resetState();
-            }), element.on("touchend", function(event) {
-                var diff = Date.now() - startTime, originalEvent = event.originalEvent || event, touches = originalEvent.changedTouches && originalEvent.changedTouches.length ? originalEvent.changedTouches : originalEvent.touches && originalEvent.touches.length ? originalEvent.touches : [ originalEvent ], e = touches[0], x = e.clientX, y = e.clientY, dist = Math.sqrt(Math.pow(x - touchStartX, 2) + Math.pow(y - touchStartY, 2));
-                tapping && TAP_DURATION > diff && MOVE_TOLERANCE > dist && (preventGhostClick(x, y), 
-                tapElement && tapElement.blur(), angular.isDefined(attr.disabled) && attr.disabled !== !1 || element.triggerHandler("click", [ event ])), 
-                resetState();
-            }), element.onclick = function(event) {}, element.on("click", function(event, touchend) {
-                scope.$apply(function() {
-                    clickHandler(scope, {
-                        $event: touchend || event
-                    });
-                });
-            }), element.on("mousedown", function(event) {
-                element.addClass(ACTIVE_CLASS_NAME);
-            }), element.on("mousemove mouseup", function(event) {
-                element.removeClass(ACTIVE_CLASS_NAME);
-            });
-        };
-    } ];
-    makeSwipeDirective("ngSwipeLeft", -1, "swipeleft"), makeSwipeDirective("ngSwipeRight", 1, "swiperight");
+    } ]), makeSwipeDirective("ngSwipeLeft", -1, "swipeleft"), makeSwipeDirective("ngSwipeRight", 1, "swiperight");
 }(window, window.angular), "undefined" != typeof module && "undefined" != typeof exports && module.exports === exports && (module.exports = "ui.router"), 
 function(window, angular, undefined) {
     "use strict";
@@ -12622,7 +12941,7 @@ function(window, angular, undefined) {
                         promises.hasOwnProperty(dep) && !locals.hasOwnProperty(dep) && (waitParams++, promises[dep].then(function(result) {
                             values[dep] = result, --waitParams || proceed();
                         }, onfailure));
-                    }), waitParams || proceed(), promises[key] = invocation.promise;
+                    }), waitParams || proceed(), promises[key] = silenceUncaughtInPromise(invocation.promise);
                 }
                 if (isResolve(locals) && self === undefined && (self = parent, parent = locals, 
                 locals = null), locals) {
@@ -12631,8 +12950,9 @@ function(window, angular, undefined) {
                 if (parent) {
                     if (!isResolve(parent)) throw new Error("'parent' must be a promise returned by $resolve.resolve()");
                 } else parent = NO_PARENT;
-                var resolution = $q.defer(), result = resolution.promise, promises = result.$$promises = {}, values = extend({}, locals), wait = 1 + plan.length / 3, merged = !1;
-                if (isDefined(parent.$$failure)) return fail(parent.$$failure), result;
+                var resolution = $q.defer(), result = silenceUncaughtInPromise(resolution.promise), promises = result.$$promises = {}, values = extend({}, locals), wait = 1 + plan.length / 3, merged = !1;
+                if (silenceUncaughtInPromise(result), isDefined(parent.$$failure)) return fail(parent.$$failure), 
+                result;
                 parent.$$inheritedValues && merge(values, omit(parent.$$inheritedValues, invocableKeys)), 
                 extend(promises, parent.$$promises), parent.$$values ? (merged = merge(values, omit(parent.$$values, invocableKeys)), 
                 result.$$inheritedValues = omit(parent.$$values, invocableKeys), done()) : (parent.$$inheritedValues && (result.$$inheritedValues = omit(parent.$$inheritedValues, invocableKeys)), 
@@ -12644,20 +12964,28 @@ function(window, angular, undefined) {
             return this.study(invocables)(locals, parent, self);
         };
     }
-    function $TemplateFactory($http, $templateCache, $injector) {
+    function TemplateFactoryProvider() {
+        var shouldUnsafelyUseHttp = angular.version.minor < 3;
+        this.shouldUnsafelyUseHttp = function(value) {
+            shouldUnsafelyUseHttp = !!value;
+        }, this.$get = [ "$http", "$templateCache", "$injector", function($http, $templateCache, $injector) {
+            return new TemplateFactory($http, $templateCache, $injector, shouldUnsafelyUseHttp);
+        } ];
+    }
+    function TemplateFactory($http, $templateCache, $injector, shouldUnsafelyUseHttp) {
         this.fromConfig = function(config, params, locals) {
             return isDefined(config.template) ? this.fromString(config.template, params) : isDefined(config.templateUrl) ? this.fromUrl(config.templateUrl, params) : isDefined(config.templateProvider) ? this.fromProvider(config.templateProvider, params, locals) : null;
         }, this.fromString = function(template, params) {
             return isFunction(template) ? template(params) : template;
         }, this.fromUrl = function(url, params) {
-            return isFunction(url) && (url = url(params)), null == url ? null : $http.get(url, {
+            return isFunction(url) && (url = url(params)), null == url ? null : shouldUnsafelyUseHttp ? $http.get(url, {
                 cache: $templateCache,
                 headers: {
                     Accept: "text/html"
                 }
             }).then(function(response) {
                 return response.data;
-            });
+            }) : $injector.get("$templateRequest")(url);
         }, this.fromProvider = function(provider, params, locals) {
             return $injector.invoke(provider, null, locals || {
                 params: params
@@ -12777,9 +13105,9 @@ function(window, angular, undefined) {
                     return parseInt(val, 10);
                 },
                 is: function(val) {
-                    return isDefined(val) && this.decode(val.toString()) === val;
+                    return val !== undefined && null !== val && this.decode(val.toString()) === val;
                 },
-                pattern: /\d+/
+                pattern: /-?\d+/
             },
             bool: {
                 encode: function(val) {
@@ -13305,13 +13633,16 @@ function(window, angular, undefined) {
                     TransitionSuperseded) : ($state.transition = null, evt = $rootScope.$broadcast("$stateChangeError", to.self, toParams, from.self, fromParams, error), 
                     evt.defaultPrevented || $urlRouter.update(), $q.reject(error));
                 });
-                return transition;
+                return silenceUncaughtInPromise(transition), transition;
             }, $state.is = function(stateOrName, params, options) {
                 options = extend({
                     relative: $state.$current
                 }, options || {});
                 var state = findState(stateOrName, options.relative);
-                return isDefined(state) ? $state.$current !== state ? !1 : params ? equalForKeys(state.params.$$values(params), $stateParams) : !0 : undefined;
+                return isDefined(state) ? $state.$current !== state ? !1 : !params || objectKeys(params).reduce(function(acc, key) {
+                    var paramDef = state.params[key];
+                    return acc && (!paramDef || paramDef.type.equals($stateParams[key], params[key]));
+                }, !0) : undefined;
             }, $state.includes = function(stateOrName, params, options) {
                 if (options = extend({
                     relative: $state.$current
@@ -13327,7 +13658,10 @@ function(window, angular, undefined) {
                     var key = keys[i], paramDef = state.params[key];
                     if (paramDef && !paramDef.type.equals($stateParams[key], params[key])) return !1;
                 }
-                return !0;
+                return objectKeys(params).reduce(function(acc, key) {
+                    var paramDef = state.params[key];
+                    return acc && !paramDef || paramDef.type.equals($stateParams[key], params[key]);
+                }, !0);
             }, $state.href = function(stateOrName, params, options) {
                 options = extend({
                     lossy: !0,
@@ -13544,25 +13878,24 @@ function(window, angular, undefined) {
             priority: -400,
             compile: function(tElement) {
                 var initial = tElement.html();
-                return function(scope, $element, attrs) {
+                return tElement.empty ? tElement.empty() : tElement[0].innerHTML = null, function(scope, $element, attrs) {
                     var current = $state.$current, name = getUiViewName(scope, attrs, $element, $interpolate), locals = current && current.locals[name];
-                    if (locals) {
-                        $element.data("$uiView", {
-                            name: name,
-                            state: locals.$$state
-                        }), $element.html(locals.$template ? locals.$template : initial);
-                        var resolveData = angular.extend({}, locals);
-                        scope[locals.$$resolveAs] = resolveData;
-                        var link = $compile($element.contents());
-                        if (locals.$$controller) {
-                            locals.$scope = scope, locals.$element = $element;
-                            var controller = $controller(locals.$$controller, locals);
-                            locals.$$controllerAs && (scope[locals.$$controllerAs] = controller, scope[locals.$$controllerAs][locals.$$resolveAs] = resolveData), 
-                            isFunction(controller.$onInit) && controller.$onInit(), $element.data("$ngControllerController", controller), 
-                            $element.children().data("$ngControllerController", controller);
-                        }
-                        link(scope);
+                    if (!locals) return $element.html(initial), void $compile($element.contents())(scope);
+                    $element.data("$uiView", {
+                        name: name,
+                        state: locals.$$state
+                    }), $element.html(locals.$template ? locals.$template : initial);
+                    var resolveData = angular.extend({}, locals);
+                    scope[locals.$$resolveAs] = resolveData;
+                    var link = $compile($element.contents());
+                    if (locals.$$controller) {
+                        locals.$scope = scope, locals.$element = $element;
+                        var controller = $controller(locals.$$controller, locals);
+                        locals.$$controllerAs && (scope[locals.$$controllerAs] = controller, scope[locals.$$controllerAs][locals.$$resolveAs] = resolveData), 
+                        isFunction(controller.$onInit) && controller.$onInit(), $element.data("$ngControllerController", controller), 
+                        $element.children().data("$ngControllerController", controller);
                     }
+                    link(scope);
                 };
             }
         };
@@ -13741,8 +14074,7 @@ function(window, angular, undefined) {
     angular.module("ui.router.util", [ "ng" ]), angular.module("ui.router.router", [ "ui.router.util" ]), 
     angular.module("ui.router.state", [ "ui.router.router", "ui.router.util" ]), angular.module("ui.router", [ "ui.router.state" ]), 
     angular.module("ui.router.compat", [ "ui.router" ]), $Resolve.$inject = [ "$q", "$injector" ], 
-    angular.module("ui.router.util").service("$resolve", $Resolve), $TemplateFactory.$inject = [ "$http", "$templateCache", "$injector" ], 
-    angular.module("ui.router.util").service("$templateFactory", $TemplateFactory);
+    angular.module("ui.router.util").service("$resolve", $Resolve), angular.module("ui.router.util").provider("$templateFactory", TemplateFactoryProvider);
     var $$UMFP;
     UrlMatcher.prototype.concat = function(pattern, config) {
         var defaultConfig = {
@@ -13993,7 +14325,7 @@ function(window, angular, undefined) {
     return angular = angular && angular.module ? angular : window.angular, angular.module("ngStorage", []).provider("$localStorage", _storageProvider("localStorage")).provider("$sessionStorage", _storageProvider("sessionStorage"));
 }), angular.module("fluro.config", [ "ngStorage" ]).provider("Fluro", function() {
     var config = {
-        apiURL: "https://apiv2.fluro.io",
+        apiURL: "https://api.fluro.io",
         token: null,
         sessionStorage: !1
     };
@@ -14128,8 +14460,28 @@ function(window, angular, undefined) {
     }, controller.logout = function() {
         controller.deleteSession();
     }, controller.recall(), controller;
-} ]).service("FluroAuthentication", [ "$q", "Fluro", "FluroTokenService", function($q, Fluro, FluroTokenService) {
+} ]).service("FluroAuthentication", [ "$q", "Fluro", "$injector", "FluroTokenService", function($q, Fluro, $injector, FluroTokenService) {
+    function retryRequest(httpConfig) {
+        console.log("Retrying request");
+        var thisTimeout = incrementalTimeout;
+        incrementalTimeout += 1e3;
+        var $http = $injector.get("$http"), $timeout = $injector.get("$timeout");
+        return $timeout(function() {
+            return $http(httpConfig);
+        }, thisTimeout);
+    }
+    var incrementalTimeout = 300;
     return {
+        responseError: function(response) {
+            switch (console.log("Response Error", response), response.status) {
+              case 429:
+              case 503:
+              case 502:
+              case 504:
+                return console.log("Retrying request"), retryRequest(response.config);
+            }
+            return $q.reject(response);
+        },
         request: function(config) {
             function startsWith(string) {
                 return config.url.slice(0, string.length) === string;
@@ -14248,6 +14600,44 @@ function(window, angular, undefined) {
         }, controller;
     };
     return storeInstance;
+} ]).service("DateTools", [ "Fluro", function(Fluro) {
+    var controller = {};
+    return controller.calculateAge = function(d) {
+        var today, birthDate;
+        Fluro.timezoneOffset ? (today = controller.localDate(), birthDate = controller.localDate(d)) : (today = new Date(), 
+        birthDate = new Date(d));
+        var age = today.getFullYear() - birthDate.getFullYear(), m = today.getMonth() - birthDate.getMonth();
+        return (0 > m || 0 === m && today.getDate() < birthDate.getDate()) && age--, console.log("DateTools.calculateAge", d, age), 
+        age;
+    }, controller.localDate = function(d) {
+        var date;
+        date = d ? new Date(d) : new Date();
+        var timezoneOffset, browserOffset = date.getTimezoneOffset();
+        if (Fluro.timezone) {
+            if (!window.moment) return console.log("Moment is not defined"), date;
+            timezoneOffset = window.moment.tz(date, Fluro.timezone).utcOffset(), browserOffset = window.moment(date).utcOffset();
+            var difference = timezoneOffset - browserOffset, offsetDifference = 60 * difference * 1e3;
+            new Date(date);
+            date.setTime(date.getTime() + offsetDifference);
+        }
+        return date;
+    }, controller.expired = function(d) {
+        var today, checkDate;
+        return Fluro.timezoneOffset ? (today = controller.localDate(), checkDate = controller.localDate(d)) : (today = new Date(), 
+        checkDate = new Date(d)), today > checkDate;
+    }, controller.isValidDate = function(d) {
+        return "[object Date]" !== Object.prototype.toString.call(d) ? !1 : !isNaN(d.getTime());
+    }, controller.readableDateRange = function(startDate, endDate, options) {
+        options || (options = {}), _.isDate(startDate) || (startDate = Fluro.timezoneOffset ? controller.localDate(startDate) : new Date(startDate)), 
+        _.isDate(endDate) || (endDate = Fluro.timezoneOffset ? controller.localDate(endDate) : new Date(endDate));
+        var today;
+        today = Fluro.timezoneOffset ? controller.localDate() : new Date();
+        var string = "";
+        return startDate.format("d/m/y") != endDate.format("d/m/y") ? (string = startDate.format("M Y") == endDate.format("M Y") ? startDate.format("l j") + " - " + endDate.format("l j F") : startDate.format("l j F") + " until " + endDate.format("l j F"), 
+        today.format("Y") != endDate.format("Y") && (string = string + " " + endDate.format("Y"))) : startDate && (string = startDate.format("l j F"), 
+        today.format("Y") != startDate.format("Y") && (string = string + " " + startDate.format("Y"))), 
+        string;
+    }, controller;
 } ]), angular.module("fluro.util", [ "fluro.config", "ngStorage" ]), function() {
     Date.shortMonths = [ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" ], 
     Date.longMonths = [ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" ], 
@@ -14808,6 +15198,9 @@ function(window, angular, undefined) {
             return [ key, object[key] ];
         });
     }
+    function baseTrim(string) {
+        return string ? string.slice(0, trimmedEndIndex(string) + 1).replace(reTrimStart, "") : string;
+    }
     function baseUnary(func) {
         return function(value) {
             return func(value);
@@ -14868,9 +15261,6 @@ function(window, angular, undefined) {
         }
         return result;
     }
-    function safeGet(object, key) {
-        return "__proto__" == key ? undefined : object[key];
-    }
     function setToArray(set) {
         var index = -1, result = Array(set.size);
         return set.forEach(function(value) {
@@ -14897,6 +15287,10 @@ function(window, angular, undefined) {
     function stringToArray(string) {
         return hasUnicode(string) ? unicodeToArray(string) : asciiToArray(string);
     }
+    function trimmedEndIndex(string) {
+        for (var index = string.length; index-- && reWhitespace.test(string.charAt(index)); ) ;
+        return index;
+    }
     function unicodeSize(string) {
         for (var result = reUnicode.lastIndex = 0; reUnicode.test(string); ) ++result;
         return result;
@@ -14907,7 +15301,7 @@ function(window, angular, undefined) {
     function unicodeWords(string) {
         return string.match(reUnicodeWord) || [];
     }
-    var undefined, VERSION = "4.17.10", LARGE_ARRAY_SIZE = 200, CORE_ERROR_TEXT = "Unsupported core-js use. Try https://npms.io/search?q=ponyfill.", FUNC_ERROR_TEXT = "Expected a function", HASH_UNDEFINED = "__lodash_hash_undefined__", MAX_MEMOIZE_SIZE = 500, PLACEHOLDER = "__lodash_placeholder__", CLONE_DEEP_FLAG = 1, CLONE_FLAT_FLAG = 2, CLONE_SYMBOLS_FLAG = 4, COMPARE_PARTIAL_FLAG = 1, COMPARE_UNORDERED_FLAG = 2, WRAP_BIND_FLAG = 1, WRAP_BIND_KEY_FLAG = 2, WRAP_CURRY_BOUND_FLAG = 4, WRAP_CURRY_FLAG = 8, WRAP_CURRY_RIGHT_FLAG = 16, WRAP_PARTIAL_FLAG = 32, WRAP_PARTIAL_RIGHT_FLAG = 64, WRAP_ARY_FLAG = 128, WRAP_REARG_FLAG = 256, WRAP_FLIP_FLAG = 512, DEFAULT_TRUNC_LENGTH = 30, DEFAULT_TRUNC_OMISSION = "...", HOT_COUNT = 800, HOT_SPAN = 16, LAZY_FILTER_FLAG = 1, LAZY_MAP_FLAG = 2, LAZY_WHILE_FLAG = 3, INFINITY = 1 / 0, MAX_SAFE_INTEGER = 9007199254740991, MAX_INTEGER = 1.7976931348623157e308, NAN = NaN, MAX_ARRAY_LENGTH = 4294967295, MAX_ARRAY_INDEX = MAX_ARRAY_LENGTH - 1, HALF_MAX_ARRAY_LENGTH = MAX_ARRAY_LENGTH >>> 1, wrapFlags = [ [ "ary", WRAP_ARY_FLAG ], [ "bind", WRAP_BIND_FLAG ], [ "bindKey", WRAP_BIND_KEY_FLAG ], [ "curry", WRAP_CURRY_FLAG ], [ "curryRight", WRAP_CURRY_RIGHT_FLAG ], [ "flip", WRAP_FLIP_FLAG ], [ "partial", WRAP_PARTIAL_FLAG ], [ "partialRight", WRAP_PARTIAL_RIGHT_FLAG ], [ "rearg", WRAP_REARG_FLAG ] ], argsTag = "[object Arguments]", arrayTag = "[object Array]", asyncTag = "[object AsyncFunction]", boolTag = "[object Boolean]", dateTag = "[object Date]", domExcTag = "[object DOMException]", errorTag = "[object Error]", funcTag = "[object Function]", genTag = "[object GeneratorFunction]", mapTag = "[object Map]", numberTag = "[object Number]", nullTag = "[object Null]", objectTag = "[object Object]", promiseTag = "[object Promise]", proxyTag = "[object Proxy]", regexpTag = "[object RegExp]", setTag = "[object Set]", stringTag = "[object String]", symbolTag = "[object Symbol]", undefinedTag = "[object Undefined]", weakMapTag = "[object WeakMap]", weakSetTag = "[object WeakSet]", arrayBufferTag = "[object ArrayBuffer]", dataViewTag = "[object DataView]", float32Tag = "[object Float32Array]", float64Tag = "[object Float64Array]", int8Tag = "[object Int8Array]", int16Tag = "[object Int16Array]", int32Tag = "[object Int32Array]", uint8Tag = "[object Uint8Array]", uint8ClampedTag = "[object Uint8ClampedArray]", uint16Tag = "[object Uint16Array]", uint32Tag = "[object Uint32Array]", reEmptyStringLeading = /\b__p \+= '';/g, reEmptyStringMiddle = /\b(__p \+=) '' \+/g, reEmptyStringTrailing = /(__e\(.*?\)|\b__t\)) \+\n'';/g, reEscapedHtml = /&(?:amp|lt|gt|quot|#39);/g, reUnescapedHtml = /[&<>"']/g, reHasEscapedHtml = RegExp(reEscapedHtml.source), reHasUnescapedHtml = RegExp(reUnescapedHtml.source), reEscape = /<%-([\s\S]+?)%>/g, reEvaluate = /<%([\s\S]+?)%>/g, reInterpolate = /<%=([\s\S]+?)%>/g, reIsDeepProp = /\.|\[(?:[^[\]]*|(["'])(?:(?!\1)[^\\]|\\.)*?\1)\]/, reIsPlainProp = /^\w*$/, rePropName = /[^.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|$))/g, reRegExpChar = /[\\^$.*+?()[\]{}|]/g, reHasRegExpChar = RegExp(reRegExpChar.source), reTrim = /^\s+|\s+$/g, reTrimStart = /^\s+/, reTrimEnd = /\s+$/, reWrapComment = /\{(?:\n\/\* \[wrapped with .+\] \*\/)?\n?/, reWrapDetails = /\{\n\/\* \[wrapped with (.+)\] \*/, reSplitDetails = /,? & /, reAsciiWord = /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g, reEscapeChar = /\\(\\)?/g, reEsTemplate = /\$\{([^\\}]*(?:\\.[^\\}]*)*)\}/g, reFlags = /\w*$/, reIsBadHex = /^[-+]0x[0-9a-f]+$/i, reIsBinary = /^0b[01]+$/i, reIsHostCtor = /^\[object .+?Constructor\]$/, reIsOctal = /^0o[0-7]+$/i, reIsUint = /^(?:0|[1-9]\d*)$/, reLatin = /[\xc0-\xd6\xd8-\xf6\xf8-\xff\u0100-\u017f]/g, reNoMatch = /($^)/, reUnescapedString = /['\n\r\u2028\u2029\\]/g, rsAstralRange = "\\ud800-\\udfff", rsComboMarksRange = "\\u0300-\\u036f", reComboHalfMarksRange = "\\ufe20-\\ufe2f", rsComboSymbolsRange = "\\u20d0-\\u20ff", rsComboRange = rsComboMarksRange + reComboHalfMarksRange + rsComboSymbolsRange, rsDingbatRange = "\\u2700-\\u27bf", rsLowerRange = "a-z\\xdf-\\xf6\\xf8-\\xff", rsMathOpRange = "\\xac\\xb1\\xd7\\xf7", rsNonCharRange = "\\x00-\\x2f\\x3a-\\x40\\x5b-\\x60\\x7b-\\xbf", rsPunctuationRange = "\\u2000-\\u206f", rsSpaceRange = " \\t\\x0b\\f\\xa0\\ufeff\\n\\r\\u2028\\u2029\\u1680\\u180e\\u2000\\u2001\\u2002\\u2003\\u2004\\u2005\\u2006\\u2007\\u2008\\u2009\\u200a\\u202f\\u205f\\u3000", rsUpperRange = "A-Z\\xc0-\\xd6\\xd8-\\xde", rsVarRange = "\\ufe0e\\ufe0f", rsBreakRange = rsMathOpRange + rsNonCharRange + rsPunctuationRange + rsSpaceRange, rsApos = "['’]", rsAstral = "[" + rsAstralRange + "]", rsBreak = "[" + rsBreakRange + "]", rsCombo = "[" + rsComboRange + "]", rsDigits = "\\d+", rsDingbat = "[" + rsDingbatRange + "]", rsLower = "[" + rsLowerRange + "]", rsMisc = "[^" + rsAstralRange + rsBreakRange + rsDigits + rsDingbatRange + rsLowerRange + rsUpperRange + "]", rsFitz = "\\ud83c[\\udffb-\\udfff]", rsModifier = "(?:" + rsCombo + "|" + rsFitz + ")", rsNonAstral = "[^" + rsAstralRange + "]", rsRegional = "(?:\\ud83c[\\udde6-\\uddff]){2}", rsSurrPair = "[\\ud800-\\udbff][\\udc00-\\udfff]", rsUpper = "[" + rsUpperRange + "]", rsZWJ = "\\u200d", rsMiscLower = "(?:" + rsLower + "|" + rsMisc + ")", rsMiscUpper = "(?:" + rsUpper + "|" + rsMisc + ")", rsOptContrLower = "(?:" + rsApos + "(?:d|ll|m|re|s|t|ve))?", rsOptContrUpper = "(?:" + rsApos + "(?:D|LL|M|RE|S|T|VE))?", reOptMod = rsModifier + "?", rsOptVar = "[" + rsVarRange + "]?", rsOptJoin = "(?:" + rsZWJ + "(?:" + [ rsNonAstral, rsRegional, rsSurrPair ].join("|") + ")" + rsOptVar + reOptMod + ")*", rsOrdLower = "\\d*(?:1st|2nd|3rd|(?![123])\\dth)(?=\\b|[A-Z_])", rsOrdUpper = "\\d*(?:1ST|2ND|3RD|(?![123])\\dTH)(?=\\b|[a-z_])", rsSeq = rsOptVar + reOptMod + rsOptJoin, rsEmoji = "(?:" + [ rsDingbat, rsRegional, rsSurrPair ].join("|") + ")" + rsSeq, rsSymbol = "(?:" + [ rsNonAstral + rsCombo + "?", rsCombo, rsRegional, rsSurrPair, rsAstral ].join("|") + ")", reApos = RegExp(rsApos, "g"), reComboMark = RegExp(rsCombo, "g"), reUnicode = RegExp(rsFitz + "(?=" + rsFitz + ")|" + rsSymbol + rsSeq, "g"), reUnicodeWord = RegExp([ rsUpper + "?" + rsLower + "+" + rsOptContrLower + "(?=" + [ rsBreak, rsUpper, "$" ].join("|") + ")", rsMiscUpper + "+" + rsOptContrUpper + "(?=" + [ rsBreak, rsUpper + rsMiscLower, "$" ].join("|") + ")", rsUpper + "?" + rsMiscLower + "+" + rsOptContrLower, rsUpper + "+" + rsOptContrUpper, rsOrdUpper, rsOrdLower, rsDigits, rsEmoji ].join("|"), "g"), reHasUnicode = RegExp("[" + rsZWJ + rsAstralRange + rsComboRange + rsVarRange + "]"), reHasUnicodeWord = /[a-z][A-Z]|[A-Z]{2,}[a-z]|[0-9][a-zA-Z]|[a-zA-Z][0-9]|[^a-zA-Z0-9 ]/, contextProps = [ "Array", "Buffer", "DataView", "Date", "Error", "Float32Array", "Float64Array", "Function", "Int8Array", "Int16Array", "Int32Array", "Map", "Math", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "Uint8Array", "Uint8ClampedArray", "Uint16Array", "Uint32Array", "WeakMap", "_", "clearTimeout", "isFinite", "parseInt", "setTimeout" ], templateCounter = -1, typedArrayTags = {};
+    var undefined, VERSION = "4.17.21", LARGE_ARRAY_SIZE = 200, CORE_ERROR_TEXT = "Unsupported core-js use. Try https://npms.io/search?q=ponyfill.", FUNC_ERROR_TEXT = "Expected a function", INVALID_TEMPL_VAR_ERROR_TEXT = "Invalid `variable` option passed into `_.template`", HASH_UNDEFINED = "__lodash_hash_undefined__", MAX_MEMOIZE_SIZE = 500, PLACEHOLDER = "__lodash_placeholder__", CLONE_DEEP_FLAG = 1, CLONE_FLAT_FLAG = 2, CLONE_SYMBOLS_FLAG = 4, COMPARE_PARTIAL_FLAG = 1, COMPARE_UNORDERED_FLAG = 2, WRAP_BIND_FLAG = 1, WRAP_BIND_KEY_FLAG = 2, WRAP_CURRY_BOUND_FLAG = 4, WRAP_CURRY_FLAG = 8, WRAP_CURRY_RIGHT_FLAG = 16, WRAP_PARTIAL_FLAG = 32, WRAP_PARTIAL_RIGHT_FLAG = 64, WRAP_ARY_FLAG = 128, WRAP_REARG_FLAG = 256, WRAP_FLIP_FLAG = 512, DEFAULT_TRUNC_LENGTH = 30, DEFAULT_TRUNC_OMISSION = "...", HOT_COUNT = 800, HOT_SPAN = 16, LAZY_FILTER_FLAG = 1, LAZY_MAP_FLAG = 2, LAZY_WHILE_FLAG = 3, INFINITY = 1 / 0, MAX_SAFE_INTEGER = 9007199254740991, MAX_INTEGER = 1.7976931348623157e308, NAN = NaN, MAX_ARRAY_LENGTH = 4294967295, MAX_ARRAY_INDEX = MAX_ARRAY_LENGTH - 1, HALF_MAX_ARRAY_LENGTH = MAX_ARRAY_LENGTH >>> 1, wrapFlags = [ [ "ary", WRAP_ARY_FLAG ], [ "bind", WRAP_BIND_FLAG ], [ "bindKey", WRAP_BIND_KEY_FLAG ], [ "curry", WRAP_CURRY_FLAG ], [ "curryRight", WRAP_CURRY_RIGHT_FLAG ], [ "flip", WRAP_FLIP_FLAG ], [ "partial", WRAP_PARTIAL_FLAG ], [ "partialRight", WRAP_PARTIAL_RIGHT_FLAG ], [ "rearg", WRAP_REARG_FLAG ] ], argsTag = "[object Arguments]", arrayTag = "[object Array]", asyncTag = "[object AsyncFunction]", boolTag = "[object Boolean]", dateTag = "[object Date]", domExcTag = "[object DOMException]", errorTag = "[object Error]", funcTag = "[object Function]", genTag = "[object GeneratorFunction]", mapTag = "[object Map]", numberTag = "[object Number]", nullTag = "[object Null]", objectTag = "[object Object]", promiseTag = "[object Promise]", proxyTag = "[object Proxy]", regexpTag = "[object RegExp]", setTag = "[object Set]", stringTag = "[object String]", symbolTag = "[object Symbol]", undefinedTag = "[object Undefined]", weakMapTag = "[object WeakMap]", weakSetTag = "[object WeakSet]", arrayBufferTag = "[object ArrayBuffer]", dataViewTag = "[object DataView]", float32Tag = "[object Float32Array]", float64Tag = "[object Float64Array]", int8Tag = "[object Int8Array]", int16Tag = "[object Int16Array]", int32Tag = "[object Int32Array]", uint8Tag = "[object Uint8Array]", uint8ClampedTag = "[object Uint8ClampedArray]", uint16Tag = "[object Uint16Array]", uint32Tag = "[object Uint32Array]", reEmptyStringLeading = /\b__p \+= '';/g, reEmptyStringMiddle = /\b(__p \+=) '' \+/g, reEmptyStringTrailing = /(__e\(.*?\)|\b__t\)) \+\n'';/g, reEscapedHtml = /&(?:amp|lt|gt|quot|#39);/g, reUnescapedHtml = /[&<>"']/g, reHasEscapedHtml = RegExp(reEscapedHtml.source), reHasUnescapedHtml = RegExp(reUnescapedHtml.source), reEscape = /<%-([\s\S]+?)%>/g, reEvaluate = /<%([\s\S]+?)%>/g, reInterpolate = /<%=([\s\S]+?)%>/g, reIsDeepProp = /\.|\[(?:[^[\]]*|(["'])(?:(?!\1)[^\\]|\\.)*?\1)\]/, reIsPlainProp = /^\w*$/, rePropName = /[^.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|$))/g, reRegExpChar = /[\\^$.*+?()[\]{}|]/g, reHasRegExpChar = RegExp(reRegExpChar.source), reTrimStart = /^\s+/, reWhitespace = /\s/, reWrapComment = /\{(?:\n\/\* \[wrapped with .+\] \*\/)?\n?/, reWrapDetails = /\{\n\/\* \[wrapped with (.+)\] \*/, reSplitDetails = /,? & /, reAsciiWord = /[^\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/g, reForbiddenIdentifierChars = /[()=,{}\[\]\/\s]/, reEscapeChar = /\\(\\)?/g, reEsTemplate = /\$\{([^\\}]*(?:\\.[^\\}]*)*)\}/g, reFlags = /\w*$/, reIsBadHex = /^[-+]0x[0-9a-f]+$/i, reIsBinary = /^0b[01]+$/i, reIsHostCtor = /^\[object .+?Constructor\]$/, reIsOctal = /^0o[0-7]+$/i, reIsUint = /^(?:0|[1-9]\d*)$/, reLatin = /[\xc0-\xd6\xd8-\xf6\xf8-\xff\u0100-\u017f]/g, reNoMatch = /($^)/, reUnescapedString = /['\n\r\u2028\u2029\\]/g, rsAstralRange = "\\ud800-\\udfff", rsComboMarksRange = "\\u0300-\\u036f", reComboHalfMarksRange = "\\ufe20-\\ufe2f", rsComboSymbolsRange = "\\u20d0-\\u20ff", rsComboRange = rsComboMarksRange + reComboHalfMarksRange + rsComboSymbolsRange, rsDingbatRange = "\\u2700-\\u27bf", rsLowerRange = "a-z\\xdf-\\xf6\\xf8-\\xff", rsMathOpRange = "\\xac\\xb1\\xd7\\xf7", rsNonCharRange = "\\x00-\\x2f\\x3a-\\x40\\x5b-\\x60\\x7b-\\xbf", rsPunctuationRange = "\\u2000-\\u206f", rsSpaceRange = " \\t\\x0b\\f\\xa0\\ufeff\\n\\r\\u2028\\u2029\\u1680\\u180e\\u2000\\u2001\\u2002\\u2003\\u2004\\u2005\\u2006\\u2007\\u2008\\u2009\\u200a\\u202f\\u205f\\u3000", rsUpperRange = "A-Z\\xc0-\\xd6\\xd8-\\xde", rsVarRange = "\\ufe0e\\ufe0f", rsBreakRange = rsMathOpRange + rsNonCharRange + rsPunctuationRange + rsSpaceRange, rsApos = "['’]", rsAstral = "[" + rsAstralRange + "]", rsBreak = "[" + rsBreakRange + "]", rsCombo = "[" + rsComboRange + "]", rsDigits = "\\d+", rsDingbat = "[" + rsDingbatRange + "]", rsLower = "[" + rsLowerRange + "]", rsMisc = "[^" + rsAstralRange + rsBreakRange + rsDigits + rsDingbatRange + rsLowerRange + rsUpperRange + "]", rsFitz = "\\ud83c[\\udffb-\\udfff]", rsModifier = "(?:" + rsCombo + "|" + rsFitz + ")", rsNonAstral = "[^" + rsAstralRange + "]", rsRegional = "(?:\\ud83c[\\udde6-\\uddff]){2}", rsSurrPair = "[\\ud800-\\udbff][\\udc00-\\udfff]", rsUpper = "[" + rsUpperRange + "]", rsZWJ = "\\u200d", rsMiscLower = "(?:" + rsLower + "|" + rsMisc + ")", rsMiscUpper = "(?:" + rsUpper + "|" + rsMisc + ")", rsOptContrLower = "(?:" + rsApos + "(?:d|ll|m|re|s|t|ve))?", rsOptContrUpper = "(?:" + rsApos + "(?:D|LL|M|RE|S|T|VE))?", reOptMod = rsModifier + "?", rsOptVar = "[" + rsVarRange + "]?", rsOptJoin = "(?:" + rsZWJ + "(?:" + [ rsNonAstral, rsRegional, rsSurrPair ].join("|") + ")" + rsOptVar + reOptMod + ")*", rsOrdLower = "\\d*(?:1st|2nd|3rd|(?![123])\\dth)(?=\\b|[A-Z_])", rsOrdUpper = "\\d*(?:1ST|2ND|3RD|(?![123])\\dTH)(?=\\b|[a-z_])", rsSeq = rsOptVar + reOptMod + rsOptJoin, rsEmoji = "(?:" + [ rsDingbat, rsRegional, rsSurrPair ].join("|") + ")" + rsSeq, rsSymbol = "(?:" + [ rsNonAstral + rsCombo + "?", rsCombo, rsRegional, rsSurrPair, rsAstral ].join("|") + ")", reApos = RegExp(rsApos, "g"), reComboMark = RegExp(rsCombo, "g"), reUnicode = RegExp(rsFitz + "(?=" + rsFitz + ")|" + rsSymbol + rsSeq, "g"), reUnicodeWord = RegExp([ rsUpper + "?" + rsLower + "+" + rsOptContrLower + "(?=" + [ rsBreak, rsUpper, "$" ].join("|") + ")", rsMiscUpper + "+" + rsOptContrUpper + "(?=" + [ rsBreak, rsUpper + rsMiscLower, "$" ].join("|") + ")", rsUpper + "?" + rsMiscLower + "+" + rsOptContrLower, rsUpper + "+" + rsOptContrUpper, rsOrdUpper, rsOrdLower, rsDigits, rsEmoji ].join("|"), "g"), reHasUnicode = RegExp("[" + rsZWJ + rsAstralRange + rsComboRange + rsVarRange + "]"), reHasUnicodeWord = /[a-z][A-Z]|[A-Z]{2}[a-z]|[0-9][a-zA-Z]|[a-zA-Z][0-9]|[^a-zA-Z0-9 ]/, contextProps = [ "Array", "Buffer", "DataView", "Date", "Error", "Float32Array", "Float64Array", "Function", "Int8Array", "Int16Array", "Int32Array", "Map", "Math", "Object", "Promise", "RegExp", "Set", "String", "Symbol", "TypeError", "Uint8Array", "Uint8ClampedArray", "Uint16Array", "Uint32Array", "WeakMap", "_", "clearTimeout", "isFinite", "parseInt", "setTimeout" ], templateCounter = -1, typedArrayTags = {};
     typedArrayTags[float32Tag] = typedArrayTags[float64Tag] = typedArrayTags[int8Tag] = typedArrayTags[int16Tag] = typedArrayTags[int32Tag] = typedArrayTags[uint8Tag] = typedArrayTags[uint8ClampedTag] = typedArrayTags[uint16Tag] = typedArrayTags[uint32Tag] = !0, 
     typedArrayTags[argsTag] = typedArrayTags[arrayTag] = typedArrayTags[arrayBufferTag] = typedArrayTags[boolTag] = typedArrayTags[dataViewTag] = typedArrayTags[dateTag] = typedArrayTags[errorTag] = typedArrayTags[funcTag] = typedArrayTags[mapTag] = typedArrayTags[numberTag] = typedArrayTags[objectTag] = typedArrayTags[regexpTag] = typedArrayTags[setTag] = typedArrayTags[stringTag] = typedArrayTags[weakMapTag] = !1;
     var cloneableTags = {};
@@ -15375,12 +15769,11 @@ function(window, angular, undefined) {
             stack || (stack = new Stack());
             var stacked = stack.get(value);
             if (stacked) return stacked;
-            if (stack.set(value, result), isSet(value)) return value.forEach(function(subValue) {
+            stack.set(value, result), isSet(value) ? value.forEach(function(subValue) {
                 result.add(baseClone(subValue, bitmask, customizer, subValue, value, stack));
-            }), result;
-            if (isMap(value)) return value.forEach(function(subValue, key) {
+            }) : isMap(value) && value.forEach(function(subValue, key) {
                 result.set(key, baseClone(subValue, bitmask, customizer, key, value, stack));
-            }), result;
+            });
             var keysFunc = isFull ? isFlat ? getAllKeysIn : getAllKeys : isFlat ? keysIn : keys, props = isArr ? undefined : keysFunc(value);
             return arrayEach(props || value, function(subValue, key) {
                 props && (key = subValue, subValue = value[key]), assignValue(result, key, baseClone(subValue, bitmask, customizer, key, value, stack));
@@ -15626,7 +16019,7 @@ function(window, angular, undefined) {
         }
         function baseMerge(object, source, srcIndex, customizer, stack) {
             object !== source && baseFor(source, function(srcValue, key) {
-                if (isObject(srcValue)) stack || (stack = new Stack()), baseMergeDeep(object, source, key, srcIndex, baseMerge, customizer, stack); else {
+                if (stack || (stack = new Stack()), isObject(srcValue)) baseMergeDeep(object, source, key, srcIndex, baseMerge, customizer, stack); else {
                     var newValue = customizer ? customizer(safeGet(object, key), srcValue, key + "", object, source, stack) : undefined;
                     newValue === undefined && (newValue = srcValue), assignMergeValue(object, key, newValue);
                 }
@@ -15640,7 +16033,7 @@ function(window, angular, undefined) {
                 var isArr = isArray(srcValue), isBuff = !isArr && isBuffer(srcValue), isTyped = !isArr && !isBuff && isTypedArray(srcValue);
                 newValue = srcValue, isArr || isBuff || isTyped ? isArray(objValue) ? newValue = objValue : isArrayLikeObject(objValue) ? newValue = copyArray(objValue) : isBuff ? (isCommon = !1, 
                 newValue = cloneBuffer(srcValue, !0)) : isTyped ? (isCommon = !1, newValue = cloneTypedArray(srcValue, !0)) : newValue = [] : isPlainObject(srcValue) || isArguments(srcValue) ? (newValue = objValue, 
-                isArguments(objValue) ? newValue = toPlainObject(objValue) : (!isObject(objValue) || srcIndex && isFunction(objValue)) && (newValue = initCloneObject(srcValue))) : isCommon = !1;
+                isArguments(objValue) ? newValue = toPlainObject(objValue) : (!isObject(objValue) || isFunction(objValue)) && (newValue = initCloneObject(srcValue))) : isCommon = !1;
             }
             isCommon && (stack.set(srcValue, newValue), mergeFunc(newValue, srcValue, srcIndex, customizer, stack), 
             stack["delete"](srcValue)), assignMergeValue(object, key, newValue);
@@ -15650,8 +16043,13 @@ function(window, angular, undefined) {
             if (length) return n += 0 > n ? length : 0, isIndex(n, length) ? array[n] : undefined;
         }
         function baseOrderBy(collection, iteratees, orders) {
+            iteratees = iteratees.length ? arrayMap(iteratees, function(iteratee) {
+                return isArray(iteratee) ? function(value) {
+                    return baseGet(value, 1 === iteratee.length ? iteratee[0] : iteratee);
+                } : iteratee;
+            }) : [ identity ];
             var index = -1;
-            iteratees = arrayMap(iteratees.length ? iteratees : [ identity ], baseUnary(getIteratee()));
+            iteratees = arrayMap(iteratees, baseUnary(getIteratee()));
             var result = baseMap(collection, function(value, key, collection) {
                 var criteria = arrayMap(iteratees, function(iteratee) {
                     return iteratee(value);
@@ -15728,6 +16126,7 @@ function(window, angular, undefined) {
             path = castPath(path, object);
             for (var index = -1, length = path.length, lastIndex = length - 1, nested = object; null != nested && ++index < length; ) {
                 var key = toKey(path[index]), newValue = value;
+                if ("__proto__" === key || "constructor" === key || "prototype" === key) return object;
                 if (index != lastIndex) {
                     var objValue = nested[key];
                     newValue = customizer ? customizer(objValue, key, nested) : undefined, newValue === undefined && (newValue = isObject(objValue) ? objValue : isIndex(path[index + 1]) ? [] : {});
@@ -15764,8 +16163,10 @@ function(window, angular, undefined) {
             return baseSortedIndexBy(array, value, identity, retHighest);
         }
         function baseSortedIndexBy(array, value, iteratee, retHighest) {
+            var low = 0, high = null == array ? 0 : array.length;
+            if (0 === high) return 0;
             value = iteratee(value);
-            for (var low = 0, high = null == array ? 0 : array.length, valIsNaN = value !== value, valIsNull = null === value, valIsSymbol = isSymbol(value), valIsUndefined = value === undefined; high > low; ) {
+            for (var valIsNaN = value !== value, valIsNull = null === value, valIsSymbol = isSymbol(value), valIsUndefined = value === undefined; high > low; ) {
                 var mid = nativeFloor((low + high) / 2), computed = iteratee(array[mid]), othIsDefined = computed !== undefined, othIsNull = null === computed, othIsReflexive = computed === computed, othIsSymbol = isSymbol(computed);
                 if (valIsNaN) var setLow = retHighest || othIsReflexive; else setLow = valIsUndefined ? othIsReflexive && (retHighest || othIsDefined) : valIsNull ? othIsReflexive && othIsDefined && (retHighest || !othIsNull) : valIsSymbol ? othIsReflexive && othIsDefined && !othIsNull && (retHighest || !othIsSymbol) : othIsNull || othIsSymbol ? !1 : retHighest ? value >= computed : value > computed;
                 setLow ? low = mid + 1 : high = mid;
@@ -16143,7 +16544,8 @@ function(window, angular, undefined) {
         function createRound(methodName) {
             var func = Math[methodName];
             return function(number, precision) {
-                if (number = toNumber(number), precision = null == precision ? 0 : nativeMin(toInteger(precision), 292)) {
+                if (number = toNumber(number), precision = null == precision ? 0 : nativeMin(toInteger(precision), 292), 
+                precision && nativeIsFinite(number)) {
                     var pair = (toString(number) + "e").split("e"), value = func(pair[0] + "e" + (+pair[1] + precision));
                     return pair = (toString(value) + "e").split("e"), +(pair[0] + "e" + (+pair[1] - precision));
                 }
@@ -16188,8 +16590,8 @@ function(window, angular, undefined) {
         function equalArrays(array, other, bitmask, customizer, equalFunc, stack) {
             var isPartial = bitmask & COMPARE_PARTIAL_FLAG, arrLength = array.length, othLength = other.length;
             if (arrLength != othLength && !(isPartial && othLength > arrLength)) return !1;
-            var stacked = stack.get(array);
-            if (stacked && stack.get(other)) return stacked == other;
+            var arrStacked = stack.get(array), othStacked = stack.get(other);
+            if (arrStacked && othStacked) return arrStacked == other && othStacked == array;
             var index = -1, result = !0, seen = bitmask & COMPARE_UNORDERED_FLAG ? new SetCache() : undefined;
             for (stack.set(array, other), stack.set(other, array); ++index < arrLength; ) {
                 var arrValue = array[index], othValue = other[index];
@@ -16258,8 +16660,8 @@ function(window, angular, undefined) {
                 var key = objProps[index];
                 if (!(isPartial ? key in other : hasOwnProperty.call(other, key))) return !1;
             }
-            var stacked = stack.get(object);
-            if (stacked && stack.get(other)) return stacked == other;
+            var objStacked = stack.get(object), othStacked = stack.get(other);
+            if (objStacked && othStacked) return objStacked == other && othStacked == object;
             var result = !0;
             stack.set(object, other), stack.set(other, object);
             for (var skipCtor = isPartial; ++index < objLength; ) {
@@ -16511,6 +16913,9 @@ function(window, angular, undefined) {
                 array[length] = isIndex(index, arrLength) ? oldArray[index] : undefined;
             }
             return array;
+        }
+        function safeGet(object, key) {
+            return "constructor" === key && "function" == typeof object[key] || "__proto__" == key ? void 0 : object[key];
         }
         function setWrapToString(wrapper, reference, bitmask) {
             var source = reference + "";
@@ -16965,7 +17370,8 @@ function(window, angular, undefined) {
                 var time = now(), isInvoking = shouldInvoke(time);
                 if (lastArgs = arguments, lastThis = this, lastCallTime = time, isInvoking) {
                     if (timerId === undefined) return leadingEdge(lastCallTime);
-                    if (maxing) return timerId = setTimeout(timerExpired, wait), invokeFunc(lastCallTime);
+                    if (maxing) return clearTimeout(timerId), timerId = setTimeout(timerExpired, wait), 
+                    invokeFunc(lastCallTime);
                 }
                 return timerId === undefined && (timerId = setTimeout(timerExpired, wait)), result;
             }
@@ -17194,7 +17600,7 @@ function(window, angular, undefined) {
                 value = isObject(other) ? other + "" : other;
             }
             if ("string" != typeof value) return 0 === value ? value : +value;
-            value = value.replace(reTrim, "");
+            value = baseTrim(value);
             var isBinary = reIsBinary.test(value);
             return isBinary || reIsOctal.test(value) ? freeParseInt(value.slice(2), isBinary ? 2 : 8) : reIsBadHex.test(value) ? NAN : +value;
         }
@@ -17399,7 +17805,7 @@ function(window, angular, undefined) {
             var settings = lodash.templateSettings;
             guard && isIterateeCall(string, options, guard) && (options = undefined), string = toString(string), 
             options = assignInWith({}, options, settings, customDefaultsAssignIn);
-            var isEscaping, isEvaluating, imports = assignInWith({}, options.imports, settings.imports, customDefaultsAssignIn), importsKeys = keys(imports), importsValues = baseValues(imports, importsKeys), index = 0, interpolate = options.interpolate || reNoMatch, source = "__p += '", reDelimiters = RegExp((options.escape || reNoMatch).source + "|" + interpolate.source + "|" + (interpolate === reInterpolate ? reEsTemplate : reNoMatch).source + "|" + (options.evaluate || reNoMatch).source + "|$", "g"), sourceURL = "//# sourceURL=" + ("sourceURL" in options ? options.sourceURL : "lodash.templateSources[" + ++templateCounter + "]") + "\n";
+            var isEscaping, isEvaluating, imports = assignInWith({}, options.imports, settings.imports, customDefaultsAssignIn), importsKeys = keys(imports), importsValues = baseValues(imports, importsKeys), index = 0, interpolate = options.interpolate || reNoMatch, source = "__p += '", reDelimiters = RegExp((options.escape || reNoMatch).source + "|" + interpolate.source + "|" + (interpolate === reInterpolate ? reEsTemplate : reNoMatch).source + "|" + (options.evaluate || reNoMatch).source + "|$", "g"), sourceURL = "//# sourceURL=" + (hasOwnProperty.call(options, "sourceURL") ? (options.sourceURL + "").replace(/\s/g, " ") : "lodash.templateSources[" + ++templateCounter + "]") + "\n";
             string.replace(reDelimiters, function(match, escapeValue, interpolateValue, esTemplateValue, evaluateValue, offset) {
                 return interpolateValue || (interpolateValue = esTemplateValue), source += string.slice(index, offset).replace(reUnescapedString, escapeStringChar), 
                 escapeValue && (isEscaping = !0, source += "' +\n__e(" + escapeValue + ") +\n'"), 
@@ -17407,8 +17813,11 @@ function(window, angular, undefined) {
                 interpolateValue && (source += "' +\n((__t = (" + interpolateValue + ")) == null ? '' : __t) +\n'"), 
                 index = offset + match.length, match;
             }), source += "';\n";
-            var variable = options.variable;
-            variable || (source = "with (obj) {\n" + source + "\n}\n"), source = (isEvaluating ? source.replace(reEmptyStringLeading, "") : source).replace(reEmptyStringMiddle, "$1").replace(reEmptyStringTrailing, "$1;"), 
+            var variable = hasOwnProperty.call(options, "variable") && options.variable;
+            if (variable) {
+                if (reForbiddenIdentifierChars.test(variable)) throw new Error(INVALID_TEMPL_VAR_ERROR_TEXT);
+            } else source = "with (obj) {\n" + source + "\n}\n";
+            source = (isEvaluating ? source.replace(reEmptyStringLeading, "") : source).replace(reEmptyStringMiddle, "$1").replace(reEmptyStringTrailing, "$1;"), 
             source = "function(" + (variable || "obj") + ") {\n" + (variable ? "" : "obj || (obj = {});\n") + "var __t, __p = ''" + (isEscaping ? ", __e = _.escape" : "") + (isEvaluating ? ", __j = Array.prototype.join;\nfunction print() { __p += __j.call(arguments, '') }\n" : ";\n") + source + "return __p\n}";
             var result = attempt(function() {
                 return Function(importsKeys, sourceURL + "return " + source).apply(undefined, importsValues);
@@ -17423,13 +17832,13 @@ function(window, angular, undefined) {
             return toString(value).toUpperCase();
         }
         function trim(string, chars, guard) {
-            if (string = toString(string), string && (guard || chars === undefined)) return string.replace(reTrim, "");
+            if (string = toString(string), string && (guard || chars === undefined)) return baseTrim(string);
             if (!string || !(chars = baseToString(chars))) return string;
             var strSymbols = stringToArray(string), chrSymbols = stringToArray(chars), start = charsStartIndex(strSymbols, chrSymbols), end = charsEndIndex(strSymbols, chrSymbols) + 1;
             return castSlice(strSymbols, start, end).join("");
         }
         function trimEnd(string, chars, guard) {
-            if (string = toString(string), string && (guard || chars === undefined)) return string.replace(reTrimEnd, "");
+            if (string = toString(string), string && (guard || chars === undefined)) return string.slice(0, trimmedEndIndex(string) + 1);
             if (!string || !(chars = baseToString(chars))) return string;
             var strSymbols = stringToArray(string), end = charsEndIndex(strSymbols, stringToArray(chars)) + 1;
             return castSlice(strSymbols, 0, end).join("");
@@ -18076,8 +18485,8 @@ function(window, angular, undefined) {
         }), baseForOwn(LazyWrapper.prototype, function(func, methodName) {
             var lodashFunc = lodash[methodName];
             if (lodashFunc) {
-                var key = lodashFunc.name + "", names = realNames[key] || (realNames[key] = []);
-                names.push({
+                var key = lodashFunc.name + "";
+                hasOwnProperty.call(realNames, key) || (realNames[key] = []), realNames[key].push({
                     name: methodName,
                     func: lodashFunc
                 });
@@ -18392,10 +18801,13 @@ function(window, angular, undefined) {
     function isObject(input) {
         return null != input && "[object Object]" === Object.prototype.toString.call(input);
     }
+    function hasOwnProp(a, b) {
+        return Object.prototype.hasOwnProperty.call(a, b);
+    }
     function isObjectEmpty(obj) {
         if (Object.getOwnPropertyNames) return 0 === Object.getOwnPropertyNames(obj).length;
         var k;
-        for (k in obj) if (obj.hasOwnProperty(k)) return !1;
+        for (k in obj) if (hasOwnProp(obj, k)) return !1;
         return !0;
     }
     function isUndefined(input) {
@@ -18411,9 +18823,6 @@ function(window, angular, undefined) {
         var i, res = [];
         for (i = 0; i < arr.length; ++i) res.push(fn(arr[i], i));
         return res;
-    }
-    function hasOwnProp(a, b) {
-        return Object.prototype.hasOwnProperty.call(a, b);
     }
     function extend(a, b) {
         for (var i in b) hasOwnProp(b, i) && (a[i] = b[i]);
@@ -18431,11 +18840,13 @@ function(window, angular, undefined) {
             overflow: -2,
             charsLeftOver: 0,
             nullInput: !1,
+            invalidEra: null,
             invalidMonth: null,
             invalidFormat: !1,
             userInvalidated: !1,
             iso: !1,
             parsedDateParts: [],
+            era: null,
             meridiem: null,
             rfc2822: !1,
             weekdayMismatch: !1
@@ -18448,7 +18859,7 @@ function(window, angular, undefined) {
         if (null == m._isValid) {
             var flags = getParsingFlags(m), parsedParts = some.call(flags.parsedDateParts, function(i) {
                 return null != i;
-            }), isNowValid = !isNaN(m._d.getTime()) && flags.overflow < 0 && !flags.empty && !flags.invalidMonth && !flags.invalidWeekday && !flags.weekdayMismatch && !flags.nullInput && !flags.invalidFormat && !flags.userInvalidated && (!flags.meridiem || flags.meridiem && parsedParts);
+            }), isNowValid = !isNaN(m._d.getTime()) && flags.overflow < 0 && !flags.empty && !flags.invalidEra && !flags.invalidMonth && !flags.invalidWeekday && !flags.weekdayMismatch && !flags.nullInput && !flags.invalidFormat && !flags.userInvalidated && (!flags.meridiem || flags.meridiem && parsedParts);
             if (m._strict && (isNowValid = isNowValid && 0 === flags.charsLeftOver && 0 === flags.unusedTokens.length && void 0 === flags.bigHour), 
             null != Object.isFrozen && Object.isFrozen(m)) return isNowValid;
             m._isValid = isNowValid;
@@ -18479,19 +18890,6 @@ function(window, angular, undefined) {
     function isMoment(obj) {
         return obj instanceof Moment || null != obj && null != obj._isAMomentObject;
     }
-    function absFloor(number) {
-        return 0 > number ? Math.ceil(number) || 0 : Math.floor(number);
-    }
-    function toInt(argumentForCoercion) {
-        var coercedNumber = +argumentForCoercion, value = 0;
-        return 0 !== coercedNumber && isFinite(coercedNumber) && (value = absFloor(coercedNumber)), 
-        value;
-    }
-    function compareArrays(array1, array2, dontConvert) {
-        var i, len = Math.min(array1.length, array2.length), lengthDiff = Math.abs(array1.length - array2.length), diffs = 0;
-        for (i = 0; len > i; i++) (dontConvert && array1[i] !== array2[i] || !dontConvert && toInt(array1[i]) !== toInt(array2[i])) && diffs++;
-        return diffs + lengthDiff;
-    }
     function warn(msg) {
         hooks.suppressDeprecationWarnings === !1 && "undefined" != typeof console && console.warn && console.warn("Deprecation warning: " + msg);
     }
@@ -18499,10 +18897,11 @@ function(window, angular, undefined) {
         var firstTime = !0;
         return extend(function() {
             if (null != hooks.deprecationHandler && hooks.deprecationHandler(null, msg), firstTime) {
-                for (var arg, args = [], i = 0; i < arguments.length; i++) {
+                var arg, i, key, args = [];
+                for (i = 0; i < arguments.length; i++) {
                     if (arg = "", "object" == typeof arguments[i]) {
                         arg += "\n[" + i + "] ";
-                        for (var key in arguments[0]) arg += key + ": " + arguments[0][key] + ", ";
+                        for (key in arguments[0]) hasOwnProp(arguments[0], key) && (arg += key + ": " + arguments[0][key] + ", ");
                         arg = arg.slice(0, -2);
                     } else arg = arguments[i];
                     args.push(arg);
@@ -18518,11 +18917,11 @@ function(window, angular, undefined) {
         deprecations[name] = !0);
     }
     function isFunction(input) {
-        return input instanceof Function || "[object Function]" === Object.prototype.toString.call(input);
+        return "undefined" != typeof Function && input instanceof Function || "[object Function]" === Object.prototype.toString.call(input);
     }
     function set(config) {
         var prop, i;
-        for (i in config) prop = config[i], isFunction(prop) ? this[i] = prop : this["_" + i] = prop;
+        for (i in config) hasOwnProp(config, i) && (prop = config[i], isFunction(prop) ? this[i] = prop : this["_" + i] = prop);
         this._config = config, this._dayOfMonthOrdinalParseLenient = new RegExp((this._dayOfMonthOrdinalParse.source || this._ordinalParse.source) + "|" + /\d{1,2}/.source);
     }
     function mergeConfigs(parentConfig, childConfig) {
@@ -18538,52 +18937,6 @@ function(window, angular, undefined) {
     function calendar(key, mom, now) {
         var output = this._calendar[key] || this._calendar.sameElse;
         return isFunction(output) ? output.call(mom, now) : output;
-    }
-    function longDateFormat(key) {
-        var format = this._longDateFormat[key], formatUpper = this._longDateFormat[key.toUpperCase()];
-        return format || !formatUpper ? format : (this._longDateFormat[key] = formatUpper.replace(/MMMM|MM|DD|dddd/g, function(val) {
-            return val.slice(1);
-        }), this._longDateFormat[key]);
-    }
-    function invalidDate() {
-        return this._invalidDate;
-    }
-    function ordinal(number) {
-        return this._ordinal.replace("%d", number);
-    }
-    function relativeTime(number, withoutSuffix, string, isFuture) {
-        var output = this._relativeTime[string];
-        return isFunction(output) ? output(number, withoutSuffix, string, isFuture) : output.replace(/%d/i, number);
-    }
-    function pastFuture(diff, output) {
-        var format = this._relativeTime[diff > 0 ? "future" : "past"];
-        return isFunction(format) ? format(output) : format.replace(/%s/i, output);
-    }
-    function addUnitAlias(unit, shorthand) {
-        var lowerCase = unit.toLowerCase();
-        aliases[lowerCase] = aliases[lowerCase + "s"] = aliases[shorthand] = unit;
-    }
-    function normalizeUnits(units) {
-        return "string" == typeof units ? aliases[units] || aliases[units.toLowerCase()] : void 0;
-    }
-    function normalizeObjectUnits(inputObject) {
-        var normalizedProp, prop, normalizedInput = {};
-        for (prop in inputObject) hasOwnProp(inputObject, prop) && (normalizedProp = normalizeUnits(prop), 
-        normalizedProp && (normalizedInput[normalizedProp] = inputObject[prop]));
-        return normalizedInput;
-    }
-    function addUnitPriority(unit, priority) {
-        priorities[unit] = priority;
-    }
-    function getPrioritizedUnits(unitsObj) {
-        var units = [];
-        for (var u in unitsObj) units.push({
-            unit: u,
-            priority: priorities[u]
-        });
-        return units.sort(function(a, b) {
-            return a.priority - b.priority;
-        }), units;
     }
     function zeroFill(number, targetLength, forceSign) {
         var absNumber = "" + Math.abs(number), zerosToFill = targetLength - absNumber.length, sign = number >= 0;
@@ -18624,6 +18977,87 @@ function(window, angular, undefined) {
         localFormattingTokens.lastIndex = 0, i -= 1;
         return format;
     }
+    function longDateFormat(key) {
+        var format = this._longDateFormat[key], formatUpper = this._longDateFormat[key.toUpperCase()];
+        return format || !formatUpper ? format : (this._longDateFormat[key] = formatUpper.match(formattingTokens).map(function(tok) {
+            return "MMMM" === tok || "MM" === tok || "DD" === tok || "dddd" === tok ? tok.slice(1) : tok;
+        }).join(""), this._longDateFormat[key]);
+    }
+    function invalidDate() {
+        return this._invalidDate;
+    }
+    function ordinal(number) {
+        return this._ordinal.replace("%d", number);
+    }
+    function relativeTime(number, withoutSuffix, string, isFuture) {
+        var output = this._relativeTime[string];
+        return isFunction(output) ? output(number, withoutSuffix, string, isFuture) : output.replace(/%d/i, number);
+    }
+    function pastFuture(diff, output) {
+        var format = this._relativeTime[diff > 0 ? "future" : "past"];
+        return isFunction(format) ? format(output) : format.replace(/%s/i, output);
+    }
+    function addUnitAlias(unit, shorthand) {
+        var lowerCase = unit.toLowerCase();
+        aliases[lowerCase] = aliases[lowerCase + "s"] = aliases[shorthand] = unit;
+    }
+    function normalizeUnits(units) {
+        return "string" == typeof units ? aliases[units] || aliases[units.toLowerCase()] : void 0;
+    }
+    function normalizeObjectUnits(inputObject) {
+        var normalizedProp, prop, normalizedInput = {};
+        for (prop in inputObject) hasOwnProp(inputObject, prop) && (normalizedProp = normalizeUnits(prop), 
+        normalizedProp && (normalizedInput[normalizedProp] = inputObject[prop]));
+        return normalizedInput;
+    }
+    function addUnitPriority(unit, priority) {
+        priorities[unit] = priority;
+    }
+    function getPrioritizedUnits(unitsObj) {
+        var u, units = [];
+        for (u in unitsObj) hasOwnProp(unitsObj, u) && units.push({
+            unit: u,
+            priority: priorities[u]
+        });
+        return units.sort(function(a, b) {
+            return a.priority - b.priority;
+        }), units;
+    }
+    function isLeapYear(year) {
+        return year % 4 === 0 && year % 100 !== 0 || year % 400 === 0;
+    }
+    function absFloor(number) {
+        return 0 > number ? Math.ceil(number) || 0 : Math.floor(number);
+    }
+    function toInt(argumentForCoercion) {
+        var coercedNumber = +argumentForCoercion, value = 0;
+        return 0 !== coercedNumber && isFinite(coercedNumber) && (value = absFloor(coercedNumber)), 
+        value;
+    }
+    function makeGetSet(unit, keepTime) {
+        return function(value) {
+            return null != value ? (set$1(this, unit, value), hooks.updateOffset(this, keepTime), 
+            this) : get(this, unit);
+        };
+    }
+    function get(mom, unit) {
+        return mom.isValid() ? mom._d["get" + (mom._isUTC ? "UTC" : "") + unit]() : NaN;
+    }
+    function set$1(mom, unit, value) {
+        mom.isValid() && !isNaN(value) && ("FullYear" === unit && isLeapYear(mom.year()) && 1 === mom.month() && 29 === mom.date() ? (value = toInt(value), 
+        mom._d["set" + (mom._isUTC ? "UTC" : "") + unit](value, mom.month(), daysInMonth(value, mom.month()))) : mom._d["set" + (mom._isUTC ? "UTC" : "") + unit](value));
+    }
+    function stringGet(units) {
+        return units = normalizeUnits(units), isFunction(this[units]) ? this[units]() : this;
+    }
+    function stringSet(units, value) {
+        if ("object" == typeof units) {
+            units = normalizeObjectUnits(units);
+            var i, prioritized = getPrioritizedUnits(units);
+            for (i = 0; i < prioritized.length; i++) this[prioritized[i].unit](units[prioritized[i].unit]);
+        } else if (units = normalizeUnits(units), isFunction(this[units])) return this[units](value);
+        return this;
+    }
     function addRegexToken(token, regex, strictRegex) {
         regexes[token] = isFunction(regex) ? regex : function(isStrict, localeData) {
             return isStrict && strictRegex ? strictRegex : regex;
@@ -18653,37 +19087,6 @@ function(window, angular, undefined) {
     }
     function addTimeToArrayFromToken(token, input, config) {
         null != input && hasOwnProp(tokens, token) && tokens[token](input, config._a, config, token);
-    }
-    function daysInYear(year) {
-        return isLeapYear(year) ? 366 : 365;
-    }
-    function isLeapYear(year) {
-        return year % 4 === 0 && year % 100 !== 0 || year % 400 === 0;
-    }
-    function getIsLeapYear() {
-        return isLeapYear(this.year());
-    }
-    function makeGetSet(unit, keepTime) {
-        return function(value) {
-            return null != value ? (set$1(this, unit, value), hooks.updateOffset(this, keepTime), 
-            this) : get(this, unit);
-        };
-    }
-    function get(mom, unit) {
-        return mom.isValid() ? mom._d["get" + (mom._isUTC ? "UTC" : "") + unit]() : NaN;
-    }
-    function set$1(mom, unit, value) {
-        mom.isValid() && !isNaN(value) && ("FullYear" === unit && isLeapYear(mom.year()) && 1 === mom.month() && 29 === mom.date() ? mom._d["set" + (mom._isUTC ? "UTC" : "") + unit](value, mom.month(), daysInMonth(value, mom.month())) : mom._d["set" + (mom._isUTC ? "UTC" : "") + unit](value));
-    }
-    function stringGet(units) {
-        return units = normalizeUnits(units), isFunction(this[units]) ? this[units]() : this;
-    }
-    function stringSet(units, value) {
-        if ("object" == typeof units) {
-            units = normalizeObjectUnits(units);
-            for (var prioritized = getPrioritizedUnits(units), i = 0; i < prioritized.length; i++) this[prioritized[i].unit](units[prioritized[i].unit]);
-        } else if (units = normalizeUnits(units), isFunction(this[units])) return this[units](value);
-        return this;
     }
     function mod(n, x) {
         return (n % x + x) % x;
@@ -18759,14 +19162,21 @@ function(window, angular, undefined) {
         this._monthsRegex = new RegExp("^(" + mixedPieces.join("|") + ")", "i"), this._monthsShortRegex = this._monthsRegex, 
         this._monthsStrictRegex = new RegExp("^(" + longPieces.join("|") + ")", "i"), this._monthsShortStrictRegex = new RegExp("^(" + shortPieces.join("|") + ")", "i");
     }
+    function daysInYear(year) {
+        return isLeapYear(year) ? 366 : 365;
+    }
+    function getIsLeapYear() {
+        return isLeapYear(this.year());
+    }
     function createDate(y, m, d, h, M, s, ms) {
-        var date = new Date(y, m, d, h, M, s, ms);
-        return 100 > y && y >= 0 && isFinite(date.getFullYear()) && date.setFullYear(y), 
+        var date;
+        return 100 > y && y >= 0 ? (date = new Date(y + 400, m, d, h, M, s, ms), isFinite(date.getFullYear()) && date.setFullYear(y)) : date = new Date(y, m, d, h, M, s, ms), 
         date;
     }
     function createUTCDate(y) {
-        var date = new Date(Date.UTC.apply(null, arguments));
-        return 100 > y && y >= 0 && isFinite(date.getUTCFullYear()) && date.setUTCFullYear(y), 
+        var date, args;
+        return 100 > y && y >= 0 ? (args = Array.prototype.slice.call(arguments), args[0] = y + 400, 
+        date = new Date(Date.UTC.apply(null, args)), isFinite(date.getUTCFullYear()) && date.setUTCFullYear(y)) : date = new Date(Date.UTC.apply(null, arguments)), 
         date;
     }
     function firstWeekOffset(year, dow, doy) {
@@ -18818,14 +19228,18 @@ function(window, angular, undefined) {
     function parseIsoWeekday(input, locale) {
         return "string" == typeof input ? locale.weekdaysParse(input) % 7 || 7 : isNaN(input) ? null : input;
     }
+    function shiftWeekdays(ws, n) {
+        return ws.slice(n, 7).concat(ws.slice(0, n));
+    }
     function localeWeekdays(m, format) {
-        return m ? isArray(this._weekdays) ? this._weekdays[m.day()] : this._weekdays[this._weekdays.isFormat.test(format) ? "format" : "standalone"][m.day()] : isArray(this._weekdays) ? this._weekdays : this._weekdays.standalone;
+        var weekdays = isArray(this._weekdays) ? this._weekdays : this._weekdays[m && m !== !0 && this._weekdays.isFormat.test(format) ? "format" : "standalone"];
+        return m === !0 ? shiftWeekdays(weekdays, this._week.dow) : m ? weekdays[m.day()] : weekdays;
     }
     function localeWeekdaysShort(m) {
-        return m ? this._weekdaysShort[m.day()] : this._weekdaysShort;
+        return m === !0 ? shiftWeekdays(this._weekdaysShort, this._week.dow) : m ? this._weekdaysShort[m.day()] : this._weekdaysShort;
     }
     function localeWeekdaysMin(m) {
-        return m ? this._weekdaysMin[m.day()] : this._weekdaysMin;
+        return m === !0 ? shiftWeekdays(this._weekdaysMin, this._week.dow) : m ? this._weekdaysMin[m.day()] : this._weekdaysMin;
     }
     function handleStrictParse$1(weekdayName, format, strict) {
         var i, ii, mom, llc = weekdayName.toLocaleLowerCase();
@@ -18847,9 +19261,9 @@ function(window, angular, undefined) {
         if (this._weekdaysParseExact) return handleStrictParse$1.call(this, weekdayName, format, strict);
         for (this._weekdaysParse || (this._weekdaysParse = [], this._minWeekdaysParse = [], 
         this._shortWeekdaysParse = [], this._fullWeekdaysParse = []), i = 0; 7 > i; i++) {
-            if (mom = createUTC([ 2e3, 1 ]).day(i), strict && !this._fullWeekdaysParse[i] && (this._fullWeekdaysParse[i] = new RegExp("^" + this.weekdays(mom, "").replace(".", ".?") + "$", "i"), 
-            this._shortWeekdaysParse[i] = new RegExp("^" + this.weekdaysShort(mom, "").replace(".", ".?") + "$", "i"), 
-            this._minWeekdaysParse[i] = new RegExp("^" + this.weekdaysMin(mom, "").replace(".", ".?") + "$", "i")), 
+            if (mom = createUTC([ 2e3, 1 ]).day(i), strict && !this._fullWeekdaysParse[i] && (this._fullWeekdaysParse[i] = new RegExp("^" + this.weekdays(mom, "").replace(".", "\\.?") + "$", "i"), 
+            this._shortWeekdaysParse[i] = new RegExp("^" + this.weekdaysShort(mom, "").replace(".", "\\.?") + "$", "i"), 
+            this._minWeekdaysParse[i] = new RegExp("^" + this.weekdaysMin(mom, "").replace(".", "\\.?") + "$", "i")), 
             this._weekdaysParse[i] || (regex = "^" + this.weekdays(mom, "") + "|^" + this.weekdaysShort(mom, "") + "|^" + this.weekdaysMin(mom, ""), 
             this._weekdaysParse[i] = new RegExp(regex.replace(".", ""), "i")), strict && "dddd" === format && this._fullWeekdaysParse[i].test(weekdayName)) return i;
             if (strict && "ddd" === format && this._shortWeekdaysParse[i].test(weekdayName)) return i;
@@ -18895,15 +19309,14 @@ function(window, angular, undefined) {
             return b.length - a.length;
         }
         var i, mom, minp, shortp, longp, minPieces = [], shortPieces = [], longPieces = [], mixedPieces = [];
-        for (i = 0; 7 > i; i++) mom = createUTC([ 2e3, 1 ]).day(i), minp = this.weekdaysMin(mom, ""), 
-        shortp = this.weekdaysShort(mom, ""), longp = this.weekdays(mom, ""), minPieces.push(minp), 
-        shortPieces.push(shortp), longPieces.push(longp), mixedPieces.push(minp), mixedPieces.push(shortp), 
-        mixedPieces.push(longp);
-        for (minPieces.sort(cmpLenRev), shortPieces.sort(cmpLenRev), longPieces.sort(cmpLenRev), 
-        mixedPieces.sort(cmpLenRev), i = 0; 7 > i; i++) shortPieces[i] = regexEscape(shortPieces[i]), 
-        longPieces[i] = regexEscape(longPieces[i]), mixedPieces[i] = regexEscape(mixedPieces[i]);
-        this._weekdaysRegex = new RegExp("^(" + mixedPieces.join("|") + ")", "i"), this._weekdaysShortRegex = this._weekdaysRegex, 
-        this._weekdaysMinRegex = this._weekdaysRegex, this._weekdaysStrictRegex = new RegExp("^(" + longPieces.join("|") + ")", "i"), 
+        for (i = 0; 7 > i; i++) mom = createUTC([ 2e3, 1 ]).day(i), minp = regexEscape(this.weekdaysMin(mom, "")), 
+        shortp = regexEscape(this.weekdaysShort(mom, "")), longp = regexEscape(this.weekdays(mom, "")), 
+        minPieces.push(minp), shortPieces.push(shortp), longPieces.push(longp), mixedPieces.push(minp), 
+        mixedPieces.push(shortp), mixedPieces.push(longp);
+        minPieces.sort(cmpLenRev), shortPieces.sort(cmpLenRev), longPieces.sort(cmpLenRev), 
+        mixedPieces.sort(cmpLenRev), this._weekdaysRegex = new RegExp("^(" + mixedPieces.join("|") + ")", "i"), 
+        this._weekdaysShortRegex = this._weekdaysRegex, this._weekdaysMinRegex = this._weekdaysRegex, 
+        this._weekdaysStrictRegex = new RegExp("^(" + longPieces.join("|") + ")", "i"), 
         this._weekdaysShortStrictRegex = new RegExp("^(" + shortPieces.join("|") + ")", "i"), 
         this._weekdaysMinStrictRegex = new RegExp("^(" + minPieces.join("|") + ")", "i");
     }
@@ -18927,6 +19340,11 @@ function(window, angular, undefined) {
     function localeMeridiem(hours, minutes, isLower) {
         return hours > 11 ? isLower ? "pm" : "PM" : isLower ? "am" : "AM";
     }
+    function commonPrefix(arr1, arr2) {
+        var i, minl = Math.min(arr1.length, arr2.length);
+        for (i = 0; minl > i; i += 1) if (arr1[i] !== arr2[i]) return i;
+        return minl;
+    }
     function normalizeLocale(key) {
         return key ? key.toLowerCase().replace("_", "-") : key;
     }
@@ -18935,7 +19353,7 @@ function(window, angular, undefined) {
             for (split = normalizeLocale(names[i]).split("-"), j = split.length, next = normalizeLocale(names[i + 1]), 
             next = next ? next.split("-") : null; j > 0; ) {
                 if (locale = loadLocale(split.slice(0, j).join("-"))) return locale;
-                if (next && next.length >= j && compareArrays(split, next, !0) >= j - 1) break;
+                if (next && next.length >= j && commonPrefix(split, next) >= j - 1) break;
                 j--;
             }
             i++;
@@ -18943,12 +19361,13 @@ function(window, angular, undefined) {
         return globalLocale;
     }
     function loadLocale(name) {
-        var oldLocale = null;
-        if (!locales[name] && "undefined" != typeof module && module && module.exports) try {
-            oldLocale = globalLocale._abbr;
-            var aliasedRequire = require;
-            aliasedRequire("./locale/" + name), getSetGlobalLocale(oldLocale);
-        } catch (e) {}
+        var aliasedRequire, oldLocale = null;
+        if (void 0 === locales[name] && "undefined" != typeof module && module && module.exports) try {
+            oldLocale = globalLocale._abbr, aliasedRequire = require, aliasedRequire("./locale/" + name), 
+            getSetGlobalLocale(oldLocale);
+        } catch (e) {
+            locales[name] = null;
+        }
         return locales[name];
     }
     function getSetGlobalLocale(key, values) {
@@ -18978,10 +19397,12 @@ function(window, angular, undefined) {
     function updateLocale(name, config) {
         if (null != config) {
             var locale, tmpLocale, parentConfig = baseConfig;
-            tmpLocale = loadLocale(name), null != tmpLocale && (parentConfig = tmpLocale._config), 
-            config = mergeConfigs(parentConfig, config), locale = new Locale(config), locale.parentLocale = locales[name], 
-            locales[name] = locale, getSetGlobalLocale(name);
-        } else null != locales[name] && (null != locales[name].parentLocale ? locales[name] = locales[name].parentLocale : null != locales[name] && delete locales[name]);
+            null != locales[name] && null != locales[name].parentLocale ? locales[name].set(mergeConfigs(locales[name]._config, config)) : (tmpLocale = loadLocale(name), 
+            null != tmpLocale && (parentConfig = tmpLocale._config), config = mergeConfigs(parentConfig, config), 
+            null == tmpLocale && (config.abbr = name), locale = new Locale(config), locale.parentLocale = locales[name], 
+            locales[name] = locale), getSetGlobalLocale(name);
+        } else null != locales[name] && (null != locales[name].parentLocale ? (locales[name] = locales[name].parentLocale, 
+        name === getSetGlobalLocale() && getSetGlobalLocale(name)) : null != locales[name] && delete locales[name]);
         return locales[name];
     }
     function getLocale(key) {
@@ -19002,42 +19423,6 @@ function(window, angular, undefined) {
         getParsingFlags(m)._overflowDayOfYear && (YEAR > overflow || overflow > DATE) && (overflow = DATE), 
         getParsingFlags(m)._overflowWeeks && -1 === overflow && (overflow = WEEK), getParsingFlags(m)._overflowWeekday && -1 === overflow && (overflow = WEEKDAY), 
         getParsingFlags(m).overflow = overflow), m;
-    }
-    function defaults(a, b, c) {
-        return null != a ? a : null != b ? b : c;
-    }
-    function currentDateArray(config) {
-        var nowValue = new Date(hooks.now());
-        return config._useUTC ? [ nowValue.getUTCFullYear(), nowValue.getUTCMonth(), nowValue.getUTCDate() ] : [ nowValue.getFullYear(), nowValue.getMonth(), nowValue.getDate() ];
-    }
-    function configFromArray(config) {
-        var i, date, currentDate, expectedWeekday, yearToUse, input = [];
-        if (!config._d) {
-            for (currentDate = currentDateArray(config), config._w && null == config._a[DATE] && null == config._a[MONTH] && dayOfYearFromWeekInfo(config), 
-            null != config._dayOfYear && (yearToUse = defaults(config._a[YEAR], currentDate[YEAR]), 
-            (config._dayOfYear > daysInYear(yearToUse) || 0 === config._dayOfYear) && (getParsingFlags(config)._overflowDayOfYear = !0), 
-            date = createUTCDate(yearToUse, 0, config._dayOfYear), config._a[MONTH] = date.getUTCMonth(), 
-            config._a[DATE] = date.getUTCDate()), i = 0; 3 > i && null == config._a[i]; ++i) config._a[i] = input[i] = currentDate[i];
-            for (;7 > i; i++) config._a[i] = input[i] = null == config._a[i] ? 2 === i ? 1 : 0 : config._a[i];
-            24 === config._a[HOUR] && 0 === config._a[MINUTE] && 0 === config._a[SECOND] && 0 === config._a[MILLISECOND] && (config._nextDay = !0, 
-            config._a[HOUR] = 0), config._d = (config._useUTC ? createUTCDate : createDate).apply(null, input), 
-            expectedWeekday = config._useUTC ? config._d.getUTCDay() : config._d.getDay(), null != config._tzm && config._d.setUTCMinutes(config._d.getUTCMinutes() - config._tzm), 
-            config._nextDay && (config._a[HOUR] = 24), config._w && "undefined" != typeof config._w.d && config._w.d !== expectedWeekday && (getParsingFlags(config).weekdayMismatch = !0);
-        }
-    }
-    function dayOfYearFromWeekInfo(config) {
-        var w, weekYear, week, weekday, dow, doy, temp, weekdayOverflow;
-        if (w = config._w, null != w.GG || null != w.W || null != w.E) dow = 1, doy = 4, 
-        weekYear = defaults(w.GG, config._a[YEAR], weekOfYear(createLocal(), 1, 4).year), 
-        week = defaults(w.W, 1), weekday = defaults(w.E, 1), (1 > weekday || weekday > 7) && (weekdayOverflow = !0); else {
-            dow = config._locale._week.dow, doy = config._locale._week.doy;
-            var curWeek = weekOfYear(createLocal(), dow, doy);
-            weekYear = defaults(w.gg, config._a[YEAR], curWeek.year), week = defaults(w.w, curWeek.week), 
-            null != w.d ? (weekday = w.d, (0 > weekday || weekday > 6) && (weekdayOverflow = !0)) : null != w.e ? (weekday = w.e + dow, 
-            (w.e < 0 || w.e > 6) && (weekdayOverflow = !0)) : weekday = dow;
-        }
-        1 > week || week > weeksInYear(weekYear, dow, doy) ? getParsingFlags(config)._overflowWeeks = !0 : null != weekdayOverflow ? getParsingFlags(config)._overflowWeekday = !0 : (temp = dayOfYearFromWeeks(weekYear, week, weekday, dow, doy), 
-        config._a[YEAR] = temp.year, config._dayOfYear = temp.dayOfYear);
     }
     function configFromISO(config) {
         var i, l, allowTime, dateFormat, timeFormat, tzFormat, string = config._i, match = extendedIsoRegex.exec(string) || basicIsoRegex.exec(string);
@@ -19071,7 +19456,7 @@ function(window, angular, undefined) {
         return 49 >= year ? 2e3 + year : 999 >= year ? 1900 + year : year;
     }
     function preprocessRFC2822(s) {
-        return s.replace(/\([^)]*\)|[\n\t]/g, " ").replace(/(\s\s+)/g, " ").trim();
+        return s.replace(/\([^)]*\)|[\n\t]/g, " ").replace(/(\s\s+)/g, " ").replace(/^\s\s*/, "").replace(/\s\s*$/, "");
     }
     function checkWeekday(weekdayStr, parsedInput, config) {
         if (weekdayStr) {
@@ -19088,10 +19473,10 @@ function(window, angular, undefined) {
         return 60 * h + m;
     }
     function configFromRFC2822(config) {
-        var match = rfc2822.exec(preprocessRFC2822(config._i));
+        var parsedArray, match = rfc2822.exec(preprocessRFC2822(config._i));
         if (match) {
-            var parsedArray = extractFromRFC2822Strings(match[4], match[3], match[2], match[5], match[6], match[7]);
-            if (!checkWeekday(match[1], parsedArray, config)) return;
+            if (parsedArray = extractFromRFC2822Strings(match[4], match[3], match[2], match[5], match[6], match[7]), 
+            !checkWeekday(match[1], parsedArray, config)) return;
             config._a = parsedArray, config._tzm = calculateOffset(match[8], match[9], match[10]), 
             config._d = createUTCDate.apply(null, config._a), config._d.setUTCMinutes(config._d.getUTCMinutes() - config._tzm), 
             getParsingFlags(config).rfc2822 = !0;
@@ -19101,13 +19486,44 @@ function(window, angular, undefined) {
         var matched = aspNetJsonRegex.exec(config._i);
         return null !== matched ? void (config._d = new Date(+matched[1])) : (configFromISO(config), 
         void (config._isValid === !1 && (delete config._isValid, configFromRFC2822(config), 
-        config._isValid === !1 && (delete config._isValid, hooks.createFromInputFallback(config)))));
+        config._isValid === !1 && (delete config._isValid, config._strict ? config._isValid = !1 : hooks.createFromInputFallback(config)))));
+    }
+    function defaults(a, b, c) {
+        return null != a ? a : null != b ? b : c;
+    }
+    function currentDateArray(config) {
+        var nowValue = new Date(hooks.now());
+        return config._useUTC ? [ nowValue.getUTCFullYear(), nowValue.getUTCMonth(), nowValue.getUTCDate() ] : [ nowValue.getFullYear(), nowValue.getMonth(), nowValue.getDate() ];
+    }
+    function configFromArray(config) {
+        var i, date, currentDate, expectedWeekday, yearToUse, input = [];
+        if (!config._d) {
+            for (currentDate = currentDateArray(config), config._w && null == config._a[DATE] && null == config._a[MONTH] && dayOfYearFromWeekInfo(config), 
+            null != config._dayOfYear && (yearToUse = defaults(config._a[YEAR], currentDate[YEAR]), 
+            (config._dayOfYear > daysInYear(yearToUse) || 0 === config._dayOfYear) && (getParsingFlags(config)._overflowDayOfYear = !0), 
+            date = createUTCDate(yearToUse, 0, config._dayOfYear), config._a[MONTH] = date.getUTCMonth(), 
+            config._a[DATE] = date.getUTCDate()), i = 0; 3 > i && null == config._a[i]; ++i) config._a[i] = input[i] = currentDate[i];
+            for (;7 > i; i++) config._a[i] = input[i] = null == config._a[i] ? 2 === i ? 1 : 0 : config._a[i];
+            24 === config._a[HOUR] && 0 === config._a[MINUTE] && 0 === config._a[SECOND] && 0 === config._a[MILLISECOND] && (config._nextDay = !0, 
+            config._a[HOUR] = 0), config._d = (config._useUTC ? createUTCDate : createDate).apply(null, input), 
+            expectedWeekday = config._useUTC ? config._d.getUTCDay() : config._d.getDay(), null != config._tzm && config._d.setUTCMinutes(config._d.getUTCMinutes() - config._tzm), 
+            config._nextDay && (config._a[HOUR] = 24), config._w && "undefined" != typeof config._w.d && config._w.d !== expectedWeekday && (getParsingFlags(config).weekdayMismatch = !0);
+        }
+    }
+    function dayOfYearFromWeekInfo(config) {
+        var w, weekYear, week, weekday, dow, doy, temp, weekdayOverflow, curWeek;
+        w = config._w, null != w.GG || null != w.W || null != w.E ? (dow = 1, doy = 4, weekYear = defaults(w.GG, config._a[YEAR], weekOfYear(createLocal(), 1, 4).year), 
+        week = defaults(w.W, 1), weekday = defaults(w.E, 1), (1 > weekday || weekday > 7) && (weekdayOverflow = !0)) : (dow = config._locale._week.dow, 
+        doy = config._locale._week.doy, curWeek = weekOfYear(createLocal(), dow, doy), weekYear = defaults(w.gg, config._a[YEAR], curWeek.year), 
+        week = defaults(w.w, curWeek.week), null != w.d ? (weekday = w.d, (0 > weekday || weekday > 6) && (weekdayOverflow = !0)) : null != w.e ? (weekday = w.e + dow, 
+        (w.e < 0 || w.e > 6) && (weekdayOverflow = !0)) : weekday = dow), 1 > week || week > weeksInYear(weekYear, dow, doy) ? getParsingFlags(config)._overflowWeeks = !0 : null != weekdayOverflow ? getParsingFlags(config)._overflowWeekday = !0 : (temp = dayOfYearFromWeeks(weekYear, week, weekday, dow, doy), 
+        config._a[YEAR] = temp.year, config._dayOfYear = temp.dayOfYear);
     }
     function configFromStringAndFormat(config) {
         if (config._f === hooks.ISO_8601) return void configFromISO(config);
         if (config._f === hooks.RFC_2822) return void configFromRFC2822(config);
         config._a = [], getParsingFlags(config).empty = !0;
-        var i, parsedInput, tokens, token, skipped, string = "" + config._i, stringLength = string.length, totalParsedInputLength = 0;
+        var i, parsedInput, tokens, token, skipped, era, string = "" + config._i, stringLength = string.length, totalParsedInputLength = 0;
         for (tokens = expandFormat(config._f, config._locale).match(formattingTokens) || [], 
         i = 0; i < tokens.length; i++) token = tokens[i], parsedInput = (string.match(getParseRegexForToken(token, config)) || [])[0], 
         parsedInput && (skipped = string.substr(0, string.indexOf(parsedInput)), skipped.length > 0 && getParsingFlags(config).unusedInput.push(skipped), 
@@ -19118,6 +19534,7 @@ function(window, angular, undefined) {
         config._a[HOUR] <= 12 && getParsingFlags(config).bigHour === !0 && config._a[HOUR] > 0 && (getParsingFlags(config).bigHour = void 0), 
         getParsingFlags(config).parsedDateParts = config._a.slice(0), getParsingFlags(config).meridiem = config._meridiem, 
         config._a[HOUR] = meridiemFixWrap(config._locale, config._a[HOUR], config._meridiem), 
+        era = getParsingFlags(config).era, null !== era && (config._a[YEAR] = config._locale.erasConvertYear(era, config._a[YEAR])), 
         configFromArray(config), checkOverflow(config);
     }
     function meridiemFixWrap(locale, hour, meridiem) {
@@ -19126,20 +19543,21 @@ function(window, angular, undefined) {
         isPm && 12 > hour && (hour += 12), isPm || 12 !== hour || (hour = 0), hour) : hour;
     }
     function configFromStringAndArray(config) {
-        var tempConfig, bestMoment, scoreToBeat, i, currentScore;
+        var tempConfig, bestMoment, scoreToBeat, i, currentScore, validFormatFound, bestFormatIsValid = !1;
         if (0 === config._f.length) return getParsingFlags(config).invalidFormat = !0, void (config._d = new Date(NaN));
-        for (i = 0; i < config._f.length; i++) currentScore = 0, tempConfig = copyConfig({}, config), 
-        null != config._useUTC && (tempConfig._useUTC = config._useUTC), tempConfig._f = config._f[i], 
-        configFromStringAndFormat(tempConfig), isValid(tempConfig) && (currentScore += getParsingFlags(tempConfig).charsLeftOver, 
-        currentScore += 10 * getParsingFlags(tempConfig).unusedTokens.length, getParsingFlags(tempConfig).score = currentScore, 
-        (null == scoreToBeat || scoreToBeat > currentScore) && (scoreToBeat = currentScore, 
-        bestMoment = tempConfig));
+        for (i = 0; i < config._f.length; i++) currentScore = 0, validFormatFound = !1, 
+        tempConfig = copyConfig({}, config), null != config._useUTC && (tempConfig._useUTC = config._useUTC), 
+        tempConfig._f = config._f[i], configFromStringAndFormat(tempConfig), isValid(tempConfig) && (validFormatFound = !0), 
+        currentScore += getParsingFlags(tempConfig).charsLeftOver, currentScore += 10 * getParsingFlags(tempConfig).unusedTokens.length, 
+        getParsingFlags(tempConfig).score = currentScore, bestFormatIsValid ? scoreToBeat > currentScore && (scoreToBeat = currentScore, 
+        bestMoment = tempConfig) : (null == scoreToBeat || scoreToBeat > currentScore || validFormatFound) && (scoreToBeat = currentScore, 
+        bestMoment = tempConfig, validFormatFound && (bestFormatIsValid = !0));
         extend(config, bestMoment || tempConfig);
     }
     function configFromObject(config) {
         if (!config._d) {
-            var i = normalizeObjectUnits(config._i);
-            config._a = map([ i.year, i.month, i.day || i.date, i.hour, i.minute, i.second, i.millisecond ], function(obj) {
+            var i = normalizeObjectUnits(config._i), dayOrDate = void 0 === i.day ? i.date : i.day;
+            config._a = map([ i.year, i.month, dayOrDate, i.hour, i.minute, i.second, i.millisecond ], function(obj) {
                 return obj && parseInt(obj, 10);
             }), configFromArray(config);
         }
@@ -19164,7 +19582,8 @@ function(window, angular, undefined) {
     }
     function createLocalOrUTC(input, format, locale, strict, isUTC) {
         var c = {};
-        return (locale === !0 || locale === !1) && (strict = locale, locale = void 0), (isObject(input) && isObjectEmpty(input) || isArray(input) && 0 === input.length) && (input = void 0), 
+        return (format === !0 || format === !1) && (strict = format, format = void 0), (locale === !0 || locale === !1) && (strict = locale, 
+        locale = void 0), (isObject(input) && isObjectEmpty(input) || isArray(input) && 0 === input.length) && (input = void 0), 
         c._isAMomentObject = !0, c._useUTC = c._isUTC = isUTC, c._l = locale, c._i = input, 
         c._f = format, c._strict = strict, createFromConfig(c);
     }
@@ -19186,8 +19605,9 @@ function(window, angular, undefined) {
         return pickBy("isAfter", args);
     }
     function isDurationValid(m) {
-        for (var key in m) if (-1 === indexOf.call(ordering, key) || null != m[key] && isNaN(m[key])) return !1;
-        for (var unitHasDecimal = !1, i = 0; i < ordering.length; ++i) if (m[ordering[i]]) {
+        var key, i, unitHasDecimal = !1;
+        for (key in m) if (hasOwnProp(m, key) && (-1 === indexOf.call(ordering, key) || null != m[key] && isNaN(m[key]))) return !1;
+        for (i = 0; i < ordering.length; ++i) if (m[ordering[i]]) {
             if (unitHasDecimal) return !1;
             parseFloat(m[ordering[i]]) !== toInt(m[ordering[i]]) && (unitHasDecimal = !0);
         }
@@ -19200,7 +19620,7 @@ function(window, angular, undefined) {
         return createDuration(NaN);
     }
     function Duration(duration) {
-        var normalizedInput = normalizeObjectUnits(duration), years = normalizedInput.year || 0, quarters = normalizedInput.quarter || 0, months = normalizedInput.month || 0, weeks = normalizedInput.week || 0, days = normalizedInput.day || 0, hours = normalizedInput.hour || 0, minutes = normalizedInput.minute || 0, seconds = normalizedInput.second || 0, milliseconds = normalizedInput.millisecond || 0;
+        var normalizedInput = normalizeObjectUnits(duration), years = normalizedInput.year || 0, quarters = normalizedInput.quarter || 0, months = normalizedInput.month || 0, weeks = normalizedInput.week || normalizedInput.isoWeek || 0, days = normalizedInput.day || 0, hours = normalizedInput.hour || 0, minutes = normalizedInput.minute || 0, seconds = normalizedInput.second || 0, milliseconds = normalizedInput.millisecond || 0;
         this._isValid = isDurationValid(normalizedInput), this._milliseconds = +milliseconds + 1e3 * seconds + 6e4 * minutes + 1e3 * hours * 60 * 60, 
         this._days = +days + 7 * weeks, this._months = +months + 3 * quarters + 12 * years, 
         this._data = {}, this._locale = getLocale(), this._bubble();
@@ -19211,6 +19631,11 @@ function(window, angular, undefined) {
     function absRound(number) {
         return 0 > number ? -1 * Math.round(-1 * number) : Math.round(number);
     }
+    function compareArrays(array1, array2, dontConvert) {
+        var i, len = Math.min(array1.length, array2.length), lengthDiff = Math.abs(array1.length - array2.length), diffs = 0;
+        for (i = 0; len > i; i++) (dontConvert && array1[i] !== array2[i] || !dontConvert && toInt(array1[i]) !== toInt(array2[i])) && diffs++;
+        return diffs + lengthDiff;
+    }
     function offset(token, separator) {
         addFormatToken(token, 0, 0, function() {
             var offset = this.utcOffset(), sign = "+";
@@ -19218,10 +19643,9 @@ function(window, angular, undefined) {
         });
     }
     function offsetFromString(matcher, string) {
-        var matches = (string || "").match(matcher);
-        if (null === matches) return null;
-        var chunk = matches[matches.length - 1] || [], parts = (chunk + "").match(chunkOffset) || [ "-", 0, 0 ], minutes = +(60 * parts[1]) + toInt(parts[2]);
-        return 0 === minutes ? 0 : "+" === parts[0] ? minutes : -minutes;
+        var chunk, parts, minutes, matches = (string || "").match(matcher);
+        return null === matches ? null : (chunk = matches[matches.length - 1] || [], parts = (chunk + "").match(chunkOffset) || [ "-", 0, 0 ], 
+        minutes = +(60 * parts[1]) + toInt(parts[2]), 0 === minutes ? 0 : "+" === parts[0] ? minutes : -minutes);
     }
     function cloneWithOffset(input, model) {
         var res, diff;
@@ -19229,7 +19653,7 @@ function(window, angular, undefined) {
         res._d.setTime(res._d.valueOf() + diff), hooks.updateOffset(res, !1), res) : createLocal(input).local();
     }
     function getDateOffset(m) {
-        return 15 * -Math.round(m._d.getTimezoneOffset() / 15);
+        return -Math.round(m._d.getTimezoneOffset());
     }
     function getSetOffset(input, keepLocalTime, keepMinutes) {
         var localAdjust, offset = this._offset || 0;
@@ -19270,12 +19694,10 @@ function(window, angular, undefined) {
     }
     function isDaylightSavingTimeShifted() {
         if (!isUndefined(this._isDSTShifted)) return this._isDSTShifted;
-        var c = {};
-        if (copyConfig(c, this), c = prepareConfig(c), c._a) {
-            var other = c._isUTC ? createUTC(c._a) : createLocal(c._a);
-            this._isDSTShifted = this.isValid() && compareArrays(c._a, other.toArray()) > 0;
-        } else this._isDSTShifted = !1;
-        return this._isDSTShifted;
+        var other, c = {};
+        return copyConfig(c, this), c = prepareConfig(c), c._a ? (other = c._isUTC ? createUTC(c._a) : createLocal(c._a), 
+        this._isDSTShifted = this.isValid() && compareArrays(c._a, other.toArray()) > 0) : this._isDSTShifted = !1, 
+        this._isDSTShifted;
     }
     function isLocal() {
         return this.isValid() ? !this._isUTC : !1;
@@ -19292,7 +19714,7 @@ function(window, angular, undefined) {
             ms: input._milliseconds,
             d: input._days,
             M: input._months
-        } : isNumber(input) ? (duration = {}, key ? duration[key] = input : duration.milliseconds = input) : (match = aspNetRegex.exec(input)) ? (sign = "-" === match[1] ? -1 : 1, 
+        } : isNumber(input) || !isNaN(+input) ? (duration = {}, key ? duration[key] = +input : duration.milliseconds = +input) : (match = aspNetRegex.exec(input)) ? (sign = "-" === match[1] ? -1 : 1, 
         duration = {
             y: 0,
             d: toInt(match[DATE]) * sign,
@@ -19300,8 +19722,7 @@ function(window, angular, undefined) {
             m: toInt(match[MINUTE]) * sign,
             s: toInt(match[SECOND]) * sign,
             ms: toInt(absRound(1e3 * match[MILLISECOND])) * sign
-        }) : (match = isoRegex.exec(input)) ? (sign = "-" === match[1] ? -1 : ("+" === match[1], 
-        1), duration = {
+        }) : (match = isoRegex.exec(input)) ? (sign = "-" === match[1] ? -1 : 1, duration = {
             y: parseIso(match[2], sign),
             M: parseIso(match[3], sign),
             w: parseIso(match[4], sign),
@@ -19312,6 +19733,7 @@ function(window, angular, undefined) {
         }) : null == duration ? duration = {} : "object" == typeof duration && ("from" in duration || "to" in duration) && (diffRes = momentsDifference(createLocal(duration.from), createLocal(duration.to)), 
         duration = {}, duration.ms = diffRes.milliseconds, duration.M = diffRes.months), 
         ret = new Duration(duration), isDuration(input) && hasOwnProp(input, "_locale") && (ret._locale = input._locale), 
+        isDuration(input) && hasOwnProp(input, "_isValid") && (ret._isValid = input._isValid), 
         ret;
     }
     function parseIso(inp, sign) {
@@ -19319,10 +19741,7 @@ function(window, angular, undefined) {
         return (isNaN(res) ? 0 : res) * sign;
     }
     function positiveMomentsDifference(base, other) {
-        var res = {
-            milliseconds: 0,
-            months: 0
-        };
+        var res = {};
         return res.months = other.month() - base.month() + 12 * (other.year() - base.year()), 
         base.clone().add(res.months, "M").isAfter(other) && --res.months, res.milliseconds = +other - +base.clone().add(res.months, "M"), 
         res;
@@ -19340,8 +19759,8 @@ function(window, angular, undefined) {
         return function(val, period) {
             var dur, tmp;
             return null === period || isNaN(+period) || (deprecateSimple(name, "moment()." + name + "(period, number) is deprecated. Please use moment()." + name + "(number, period). See http://momentjs.com/guides/#/warnings/add-inverted-param/ for more info."), 
-            tmp = val, val = period, period = tmp), val = "string" == typeof val ? +val : val, 
-            dur = createDuration(val, period), addSubtract(this, dur, direction), this;
+            tmp = val, val = period, period = tmp), dur = createDuration(val, period), addSubtract(this, dur, direction), 
+            this;
         };
     }
     function addSubtract(mom, duration, isAdding, updateOffset) {
@@ -19350,11 +19769,36 @@ function(window, angular, undefined) {
         days && set$1(mom, "Date", get(mom, "Date") + days * isAdding), milliseconds && mom._d.setTime(mom._d.valueOf() + milliseconds * isAdding), 
         updateOffset && hooks.updateOffset(mom, days || months));
     }
+    function isString(input) {
+        return "string" == typeof input || input instanceof String;
+    }
+    function isMomentInput(input) {
+        return isMoment(input) || isDate(input) || isString(input) || isNumber(input) || isNumberOrStringArray(input) || isMomentInputObject(input) || null === input || void 0 === input;
+    }
+    function isMomentInputObject(input) {
+        var i, property, objectTest = isObject(input) && !isObjectEmpty(input), propertyTest = !1, properties = [ "years", "year", "y", "months", "month", "M", "days", "day", "d", "dates", "date", "D", "hours", "hour", "h", "minutes", "minute", "m", "seconds", "second", "s", "milliseconds", "millisecond", "ms" ];
+        for (i = 0; i < properties.length; i += 1) property = properties[i], propertyTest = propertyTest || hasOwnProp(input, property);
+        return objectTest && propertyTest;
+    }
+    function isNumberOrStringArray(input) {
+        var arrayTest = isArray(input), dataTypeTest = !1;
+        return arrayTest && (dataTypeTest = 0 === input.filter(function(item) {
+            return !isNumber(item) && isString(input);
+        }).length), arrayTest && dataTypeTest;
+    }
+    function isCalendarSpec(input) {
+        var i, property, objectTest = isObject(input) && !isObjectEmpty(input), propertyTest = !1, properties = [ "sameDay", "nextDay", "lastDay", "nextWeek", "lastWeek", "sameElse" ];
+        for (i = 0; i < properties.length; i += 1) property = properties[i], propertyTest = propertyTest || hasOwnProp(input, property);
+        return objectTest && propertyTest;
+    }
     function getCalendarFormat(myMoment, now) {
         var diff = myMoment.diff(now, "days", !0);
         return -6 > diff ? "sameElse" : -1 > diff ? "lastWeek" : 0 > diff ? "lastDay" : 1 > diff ? "sameDay" : 2 > diff ? "nextDay" : 7 > diff ? "nextWeek" : "sameElse";
     }
     function calendar$1(time, formats) {
+        1 === arguments.length && (arguments[0] ? isMomentInput(arguments[0]) ? (time = arguments[0], 
+        formats = void 0) : isCalendarSpec(arguments[0]) && (formats = arguments[0], time = void 0) : (time = void 0, 
+        formats = void 0));
         var now = time || createLocal(), sod = cloneWithOffset(now, this).startOf("day"), format = hooks.calendarFormat(this, sod) || "sameElse", output = formats && (isFunction(formats[format]) ? formats[format].call(this, now) : formats[format]);
         return this.format(output || this.localeData().calendar(format, this, createLocal(now)));
     }
@@ -19363,20 +19807,22 @@ function(window, angular, undefined) {
     }
     function isAfter(input, units) {
         var localInput = isMoment(input) ? input : createLocal(input);
-        return this.isValid() && localInput.isValid() ? (units = normalizeUnits(isUndefined(units) ? "millisecond" : units), 
+        return this.isValid() && localInput.isValid() ? (units = normalizeUnits(units) || "millisecond", 
         "millisecond" === units ? this.valueOf() > localInput.valueOf() : localInput.valueOf() < this.clone().startOf(units).valueOf()) : !1;
     }
     function isBefore(input, units) {
         var localInput = isMoment(input) ? input : createLocal(input);
-        return this.isValid() && localInput.isValid() ? (units = normalizeUnits(isUndefined(units) ? "millisecond" : units), 
+        return this.isValid() && localInput.isValid() ? (units = normalizeUnits(units) || "millisecond", 
         "millisecond" === units ? this.valueOf() < localInput.valueOf() : this.clone().endOf(units).valueOf() < localInput.valueOf()) : !1;
     }
     function isBetween(from, to, units, inclusivity) {
-        return inclusivity = inclusivity || "()", ("(" === inclusivity[0] ? this.isAfter(from, units) : !this.isBefore(from, units)) && (")" === inclusivity[1] ? this.isBefore(to, units) : !this.isAfter(to, units));
+        var localFrom = isMoment(from) ? from : createLocal(from), localTo = isMoment(to) ? to : createLocal(to);
+        return this.isValid() && localFrom.isValid() && localTo.isValid() ? (inclusivity = inclusivity || "()", 
+        ("(" === inclusivity[0] ? this.isAfter(localFrom, units) : !this.isBefore(localFrom, units)) && (")" === inclusivity[1] ? this.isBefore(localTo, units) : !this.isAfter(localTo, units))) : !1;
     }
     function isSame(input, units) {
         var inputMs, localInput = isMoment(input) ? input : createLocal(input);
-        return this.isValid() && localInput.isValid() ? (units = normalizeUnits(units || "millisecond"), 
+        return this.isValid() && localInput.isValid() ? (units = normalizeUnits(units) || "millisecond", 
         "millisecond" === units ? this.valueOf() === localInput.valueOf() : (inputMs = localInput.valueOf(), 
         this.clone().startOf(units).valueOf() <= inputMs && inputMs <= this.clone().endOf(units).valueOf())) : !1;
     }
@@ -19429,6 +19875,7 @@ function(window, angular, undefined) {
         return asFloat ? output : absFloor(output);
     }
     function monthDiff(a, b) {
+        if (a.date() < b.date()) return -monthDiff(b, a);
         var anchor2, adjust, wholeMonthDiff = 12 * (b.year() - a.year()) + (b.month() - a.month()), anchor = a.clone().add(wholeMonthDiff, "months");
         return 0 > b - anchor ? (anchor2 = a.clone().add(wholeMonthDiff - 1, "months"), 
         adjust = (b - anchor) / (anchor - anchor2)) : (anchor2 = a.clone().add(wholeMonthDiff + 1, "months"), 
@@ -19444,11 +19891,10 @@ function(window, angular, undefined) {
     }
     function inspect() {
         if (!this.isValid()) return "moment.invalid(/* " + this._i + " */)";
-        var func = "moment", zone = "";
-        this.isLocal() || (func = 0 === this.utcOffset() ? "moment.utc" : "moment.parseZone", 
-        zone = "Z");
-        var prefix = "[" + func + '("]', year = 0 <= this.year() && this.year() <= 9999 ? "YYYY" : "YYYYYY", datetime = "-MM-DD[T]HH:mm:ss.SSS", suffix = zone + '[")]';
-        return this.format(prefix + year + datetime + suffix);
+        var prefix, year, datetime, suffix, func = "moment", zone = "";
+        return this.isLocal() || (func = 0 === this.utcOffset() ? "moment.utc" : "moment.parseZone", 
+        zone = "Z"), prefix = "[" + func + '("]', year = 0 <= this.year() && this.year() <= 9999 ? "YYYY" : "YYYYYY", 
+        datetime = "-MM-DD[T]HH:mm:ss.SSS", suffix = zone + '[")]', this.format(prefix + year + datetime + suffix);
     }
     function format(inputString) {
         inputString || (inputString = this.isUtc() ? hooks.defaultFormatUtc : hooks.defaultFormat);
@@ -19481,36 +19927,98 @@ function(window, angular, undefined) {
     function localeData() {
         return this._locale;
     }
+    function mod$1(dividend, divisor) {
+        return (dividend % divisor + divisor) % divisor;
+    }
+    function localStartOfDate(y, m, d) {
+        return 100 > y && y >= 0 ? new Date(y + 400, m, d) - MS_PER_400_YEARS : new Date(y, m, d).valueOf();
+    }
+    function utcStartOfDate(y, m, d) {
+        return 100 > y && y >= 0 ? Date.UTC(y + 400, m, d) - MS_PER_400_YEARS : Date.UTC(y, m, d);
+    }
     function startOf(units) {
-        switch (units = normalizeUnits(units)) {
+        var time, startOfDate;
+        if (units = normalizeUnits(units), void 0 === units || "millisecond" === units || !this.isValid()) return this;
+        switch (startOfDate = this._isUTC ? utcStartOfDate : localStartOfDate, units) {
           case "year":
-            this.month(0);
+            time = startOfDate(this.year(), 0, 1);
+            break;
 
           case "quarter":
+            time = startOfDate(this.year(), this.month() - this.month() % 3, 1);
+            break;
+
           case "month":
-            this.date(1);
+            time = startOfDate(this.year(), this.month(), 1);
+            break;
 
           case "week":
+            time = startOfDate(this.year(), this.month(), this.date() - this.weekday());
+            break;
+
           case "isoWeek":
+            time = startOfDate(this.year(), this.month(), this.date() - (this.isoWeekday() - 1));
+            break;
+
           case "day":
           case "date":
-            this.hours(0);
+            time = startOfDate(this.year(), this.month(), this.date());
+            break;
 
           case "hour":
-            this.minutes(0);
+            time = this._d.valueOf(), time -= mod$1(time + (this._isUTC ? 0 : this.utcOffset() * MS_PER_MINUTE), MS_PER_HOUR);
+            break;
 
           case "minute":
-            this.seconds(0);
+            time = this._d.valueOf(), time -= mod$1(time, MS_PER_MINUTE);
+            break;
 
           case "second":
-            this.milliseconds(0);
+            time = this._d.valueOf(), time -= mod$1(time, MS_PER_SECOND);
         }
-        return "week" === units && this.weekday(0), "isoWeek" === units && this.isoWeekday(1), 
-        "quarter" === units && this.month(3 * Math.floor(this.month() / 3)), this;
+        return this._d.setTime(time), hooks.updateOffset(this, !0), this;
     }
     function endOf(units) {
-        return units = normalizeUnits(units), void 0 === units || "millisecond" === units ? this : ("date" === units && (units = "day"), 
-        this.startOf(units).add(1, "isoWeek" === units ? "week" : units).subtract(1, "ms"));
+        var time, startOfDate;
+        if (units = normalizeUnits(units), void 0 === units || "millisecond" === units || !this.isValid()) return this;
+        switch (startOfDate = this._isUTC ? utcStartOfDate : localStartOfDate, units) {
+          case "year":
+            time = startOfDate(this.year() + 1, 0, 1) - 1;
+            break;
+
+          case "quarter":
+            time = startOfDate(this.year(), this.month() - this.month() % 3 + 3, 1) - 1;
+            break;
+
+          case "month":
+            time = startOfDate(this.year(), this.month() + 1, 1) - 1;
+            break;
+
+          case "week":
+            time = startOfDate(this.year(), this.month(), this.date() - this.weekday() + 7) - 1;
+            break;
+
+          case "isoWeek":
+            time = startOfDate(this.year(), this.month(), this.date() - (this.isoWeekday() - 1) + 7) - 1;
+            break;
+
+          case "day":
+          case "date":
+            time = startOfDate(this.year(), this.month(), this.date() + 1) - 1;
+            break;
+
+          case "hour":
+            time = this._d.valueOf(), time += MS_PER_HOUR - mod$1(time + (this._isUTC ? 0 : this.utcOffset() * MS_PER_MINUTE), MS_PER_HOUR) - 1;
+            break;
+
+          case "minute":
+            time = this._d.valueOf(), time += MS_PER_MINUTE - mod$1(time, MS_PER_MINUTE) - 1;
+            break;
+
+          case "second":
+            time = this._d.valueOf(), time += MS_PER_SECOND - mod$1(time, MS_PER_SECOND) - 1;
+        }
+        return this._d.setTime(time), hooks.updateOffset(this, !0), this;
     }
     function valueOf() {
         return this._d.valueOf() - 6e4 * (this._offset || 0);
@@ -19558,6 +20066,106 @@ function(window, angular, undefined) {
             strict: this._strict
         };
     }
+    function localeEras(m, format) {
+        var i, l, date, eras = this._eras || getLocale("en")._eras;
+        for (i = 0, l = eras.length; l > i; ++i) {
+            switch (typeof eras[i].since) {
+              case "string":
+                date = hooks(eras[i].since).startOf("day"), eras[i].since = date.valueOf();
+            }
+            switch (typeof eras[i].until) {
+              case "undefined":
+                eras[i].until = +(1 / 0);
+                break;
+
+              case "string":
+                date = hooks(eras[i].until).startOf("day").valueOf(), eras[i].until = date.valueOf();
+            }
+        }
+        return eras;
+    }
+    function localeErasParse(eraName, format, strict) {
+        var i, l, name, abbr, narrow, eras = this.eras();
+        for (eraName = eraName.toUpperCase(), i = 0, l = eras.length; l > i; ++i) if (name = eras[i].name.toUpperCase(), 
+        abbr = eras[i].abbr.toUpperCase(), narrow = eras[i].narrow.toUpperCase(), strict) switch (format) {
+          case "N":
+          case "NN":
+          case "NNN":
+            if (abbr === eraName) return eras[i];
+            break;
+
+          case "NNNN":
+            if (name === eraName) return eras[i];
+            break;
+
+          case "NNNNN":
+            if (narrow === eraName) return eras[i];
+        } else if ([ name, abbr, narrow ].indexOf(eraName) >= 0) return eras[i];
+    }
+    function localeErasConvertYear(era, year) {
+        var dir = era.since <= era.until ? 1 : -1;
+        return void 0 === year ? hooks(era.since).year() : hooks(era.since).year() + (year - era.offset) * dir;
+    }
+    function getEraName() {
+        var i, l, val, eras = this.localeData().eras();
+        for (i = 0, l = eras.length; l > i; ++i) {
+            if (val = this.clone().startOf("day").valueOf(), eras[i].since <= val && val <= eras[i].until) return eras[i].name;
+            if (eras[i].until <= val && val <= eras[i].since) return eras[i].name;
+        }
+        return "";
+    }
+    function getEraNarrow() {
+        var i, l, val, eras = this.localeData().eras();
+        for (i = 0, l = eras.length; l > i; ++i) {
+            if (val = this.clone().startOf("day").valueOf(), eras[i].since <= val && val <= eras[i].until) return eras[i].narrow;
+            if (eras[i].until <= val && val <= eras[i].since) return eras[i].narrow;
+        }
+        return "";
+    }
+    function getEraAbbr() {
+        var i, l, val, eras = this.localeData().eras();
+        for (i = 0, l = eras.length; l > i; ++i) {
+            if (val = this.clone().startOf("day").valueOf(), eras[i].since <= val && val <= eras[i].until) return eras[i].abbr;
+            if (eras[i].until <= val && val <= eras[i].since) return eras[i].abbr;
+        }
+        return "";
+    }
+    function getEraYear() {
+        var i, l, dir, val, eras = this.localeData().eras();
+        for (i = 0, l = eras.length; l > i; ++i) if (dir = eras[i].since <= eras[i].until ? 1 : -1, 
+        val = this.clone().startOf("day").valueOf(), eras[i].since <= val && val <= eras[i].until || eras[i].until <= val && val <= eras[i].since) return (this.year() - hooks(eras[i].since).year()) * dir + eras[i].offset;
+        return this.year();
+    }
+    function erasNameRegex(isStrict) {
+        return hasOwnProp(this, "_erasNameRegex") || computeErasParse.call(this), isStrict ? this._erasNameRegex : this._erasRegex;
+    }
+    function erasAbbrRegex(isStrict) {
+        return hasOwnProp(this, "_erasAbbrRegex") || computeErasParse.call(this), isStrict ? this._erasAbbrRegex : this._erasRegex;
+    }
+    function erasNarrowRegex(isStrict) {
+        return hasOwnProp(this, "_erasNarrowRegex") || computeErasParse.call(this), isStrict ? this._erasNarrowRegex : this._erasRegex;
+    }
+    function matchEraAbbr(isStrict, locale) {
+        return locale.erasAbbrRegex(isStrict);
+    }
+    function matchEraName(isStrict, locale) {
+        return locale.erasNameRegex(isStrict);
+    }
+    function matchEraNarrow(isStrict, locale) {
+        return locale.erasNarrowRegex(isStrict);
+    }
+    function matchEraYearOrdinal(isStrict, locale) {
+        return locale._eraYearOrdinalRegex || matchUnsigned;
+    }
+    function computeErasParse() {
+        var i, l, abbrPieces = [], namePieces = [], narrowPieces = [], mixedPieces = [], eras = this.eras();
+        for (i = 0, l = eras.length; l > i; ++i) namePieces.push(regexEscape(eras[i].name)), 
+        abbrPieces.push(regexEscape(eras[i].abbr)), narrowPieces.push(regexEscape(eras[i].narrow)), 
+        mixedPieces.push(regexEscape(eras[i].name)), mixedPieces.push(regexEscape(eras[i].abbr)), 
+        mixedPieces.push(regexEscape(eras[i].narrow));
+        this._erasRegex = new RegExp("^(" + mixedPieces.join("|") + ")", "i"), this._erasNameRegex = new RegExp("^(" + namePieces.join("|") + ")", "i"), 
+        this._erasAbbrRegex = new RegExp("^(" + abbrPieces.join("|") + ")", "i"), this._erasNarrowRegex = new RegExp("^(" + narrowPieces.join("|") + ")", "i");
+    }
     function addWeekYearFormatToken(token, getter) {
         addFormatToken(0, [ token, token.length ], 0, getter);
     }
@@ -19570,9 +20178,16 @@ function(window, angular, undefined) {
     function getISOWeeksInYear() {
         return weeksInYear(this.year(), 1, 4);
     }
+    function getISOWeeksInISOWeekYear() {
+        return weeksInYear(this.isoWeekYear(), 1, 4);
+    }
     function getWeeksInYear() {
         var weekInfo = this.localeData()._week;
         return weeksInYear(this.year(), weekInfo.dow, weekInfo.doy);
+    }
+    function getWeeksInWeekYear() {
+        var weekInfo = this.localeData()._week;
+        return weeksInYear(this.weekYear(), weekInfo.dow, weekInfo.doy);
     }
     function getSetWeekYearHelper(input, week, weekday, dow, doy) {
         var weeksTarget;
@@ -19624,9 +20239,8 @@ function(window, angular, undefined) {
         "boolean" == typeof localeSorted ? (isNumber(format) && (index = format, format = void 0), 
         format = format || "") : (format = localeSorted, index = format, localeSorted = !1, 
         isNumber(format) && (index = format, format = void 0), format = format || "");
-        var locale = getLocale(), shift = localeSorted ? locale._week.dow : 0;
+        var i, locale = getLocale(), shift = localeSorted ? locale._week.dow : 0, out = [];
         if (null != index) return get$1(format, (index + shift) % 7, field, "day");
-        var i, out = [];
         for (i = 0; 7 > i; i++) out[i] = get$1(format, (i + shift) % 7, field, "day");
         return out;
     }
@@ -19685,9 +20299,17 @@ function(window, angular, undefined) {
     function as(units) {
         if (!this.isValid()) return NaN;
         var days, months, milliseconds = this._milliseconds;
-        if (units = normalizeUnits(units), "month" === units || "year" === units) return days = this._days + milliseconds / 864e5, 
-        months = this._months + daysToMonths(days), "month" === units ? months : months / 12;
-        switch (days = this._days + Math.round(monthsToDays(this._months)), units) {
+        if (units = normalizeUnits(units), "month" === units || "quarter" === units || "year" === units) switch (days = this._days + milliseconds / 864e5, 
+        months = this._months + daysToMonths(days), units) {
+          case "month":
+            return months;
+
+          case "quarter":
+            return months / 3;
+
+          case "year":
+            return months / 12;
+        } else switch (days = this._days + Math.round(monthsToDays(this._months)), units) {
           case "week":
             return days / 7 + milliseconds / 6048e5;
 
@@ -19735,9 +20357,11 @@ function(window, angular, undefined) {
     function substituteTimeAgo(string, number, withoutSuffix, isFuture, locale) {
         return locale.relativeTime(number || 1, !!withoutSuffix, string, isFuture);
     }
-    function relativeTime$1(posNegDuration, withoutSuffix, locale) {
-        var duration = createDuration(posNegDuration).abs(), seconds = round(duration.as("s")), minutes = round(duration.as("m")), hours = round(duration.as("h")), days = round(duration.as("d")), months = round(duration.as("M")), years = round(duration.as("y")), a = seconds <= thresholds.ss && [ "s", seconds ] || seconds < thresholds.s && [ "ss", seconds ] || 1 >= minutes && [ "m" ] || minutes < thresholds.m && [ "mm", minutes ] || 1 >= hours && [ "h" ] || hours < thresholds.h && [ "hh", hours ] || 1 >= days && [ "d" ] || days < thresholds.d && [ "dd", days ] || 1 >= months && [ "M" ] || months < thresholds.M && [ "MM", months ] || 1 >= years && [ "y" ] || [ "yy", years ];
-        return a[2] = withoutSuffix, a[3] = +posNegDuration > 0, a[4] = locale, substituteTimeAgo.apply(null, a);
+    function relativeTime$1(posNegDuration, withoutSuffix, thresholds, locale) {
+        var duration = createDuration(posNegDuration).abs(), seconds = round(duration.as("s")), minutes = round(duration.as("m")), hours = round(duration.as("h")), days = round(duration.as("d")), months = round(duration.as("M")), weeks = round(duration.as("w")), years = round(duration.as("y")), a = seconds <= thresholds.ss && [ "s", seconds ] || seconds < thresholds.s && [ "ss", seconds ] || 1 >= minutes && [ "m" ] || minutes < thresholds.m && [ "mm", minutes ] || 1 >= hours && [ "h" ] || hours < thresholds.h && [ "hh", hours ] || 1 >= days && [ "d" ] || days < thresholds.d && [ "dd", days ];
+        return null != thresholds.w && (a = a || 1 >= weeks && [ "w" ] || weeks < thresholds.w && [ "ww", weeks ]), 
+        a = a || 1 >= months && [ "M" ] || months < thresholds.M && [ "MM", months ] || 1 >= years && [ "y" ] || [ "yy", years ], 
+        a[2] = withoutSuffix, a[3] = +posNegDuration > 0, a[4] = locale, substituteTimeAgo.apply(null, a);
     }
     function getSetRelativeTimeRounding(roundingFunction) {
         return void 0 === roundingFunction ? round : "function" == typeof roundingFunction ? (round = roundingFunction, 
@@ -19747,27 +20371,31 @@ function(window, angular, undefined) {
         return void 0 === thresholds[threshold] ? !1 : void 0 === limit ? thresholds[threshold] : (thresholds[threshold] = limit, 
         "s" === threshold && (thresholds.ss = limit - 1), !0);
     }
-    function humanize(withSuffix) {
+    function humanize(argWithSuffix, argThresholds) {
         if (!this.isValid()) return this.localeData().invalidDate();
-        var locale = this.localeData(), output = relativeTime$1(this, !withSuffix, locale);
-        return withSuffix && (output = locale.pastFuture(+this, output)), locale.postformat(output);
+        var locale, output, withSuffix = !1, th = thresholds;
+        return "object" == typeof argWithSuffix && (argThresholds = argWithSuffix, argWithSuffix = !1), 
+        "boolean" == typeof argWithSuffix && (withSuffix = argWithSuffix), "object" == typeof argThresholds && (th = Object.assign({}, thresholds, argThresholds), 
+        null != argThresholds.s && null == argThresholds.ss && (th.ss = argThresholds.s - 1)), 
+        locale = this.localeData(), output = relativeTime$1(this, !withSuffix, th, locale), 
+        withSuffix && (output = locale.pastFuture(+this, output)), locale.postformat(output);
     }
     function sign(x) {
         return (x > 0) - (0 > x) || +x;
     }
     function toISOString$1() {
         if (!this.isValid()) return this.localeData().invalidDate();
-        var minutes, hours, years, seconds = abs$1(this._milliseconds) / 1e3, days = abs$1(this._days), months = abs$1(this._months);
-        minutes = absFloor(seconds / 60), hours = absFloor(minutes / 60), seconds %= 60, 
-        minutes %= 60, years = absFloor(months / 12), months %= 12;
-        var Y = years, M = months, D = days, h = hours, m = minutes, s = seconds ? seconds.toFixed(3).replace(/\.?0+$/, "") : "", total = this.asSeconds();
-        if (!total) return "P0D";
-        var totalSign = 0 > total ? "-" : "", ymSign = sign(this._months) !== sign(total) ? "-" : "", daysSign = sign(this._days) !== sign(total) ? "-" : "", hmsSign = sign(this._milliseconds) !== sign(total) ? "-" : "";
-        return totalSign + "P" + (Y ? ymSign + Y + "Y" : "") + (M ? ymSign + M + "M" : "") + (D ? daysSign + D + "D" : "") + (h || m || s ? "T" : "") + (h ? hmsSign + h + "H" : "") + (m ? hmsSign + m + "M" : "") + (s ? hmsSign + s + "S" : "");
+        var minutes, hours, years, s, totalSign, ymSign, daysSign, hmsSign, seconds = abs$1(this._milliseconds) / 1e3, days = abs$1(this._days), months = abs$1(this._months), total = this.asSeconds();
+        return total ? (minutes = absFloor(seconds / 60), hours = absFloor(minutes / 60), 
+        seconds %= 60, minutes %= 60, years = absFloor(months / 12), months %= 12, s = seconds ? seconds.toFixed(3).replace(/\.?0+$/, "") : "", 
+        totalSign = 0 > total ? "-" : "", ymSign = sign(this._months) !== sign(total) ? "-" : "", 
+        daysSign = sign(this._days) !== sign(total) ? "-" : "", hmsSign = sign(this._milliseconds) !== sign(total) ? "-" : "", 
+        totalSign + "P" + (years ? ymSign + years + "Y" : "") + (months ? ymSign + months + "M" : "") + (days ? daysSign + days + "D" : "") + (hours || minutes || seconds ? "T" : "") + (hours ? hmsSign + hours + "H" : "") + (minutes ? hmsSign + minutes + "M" : "") + (seconds ? hmsSign + s + "S" : "")) : "P0D";
     }
     var hookCallback, some;
     some = Array.prototype.some ? Array.prototype.some : function(fun) {
-        for (var t = Object(this), len = t.length >>> 0, i = 0; len > i; i++) if (i in t && fun.call(this, t[i], i, t)) return !0;
+        var i, t = Object(this), len = t.length >>> 0;
+        for (i = 0; len > i; i++) if (i in t && fun.call(this, t[i], i, t)) return !0;
         return !1;
     };
     var momentProperties = hooks.momentProperties = [], updateInProgress = !1, deprecations = {};
@@ -19778,14 +20406,14 @@ function(window, angular, undefined) {
         for (i in obj) hasOwnProp(obj, i) && res.push(i);
         return res;
     };
-    var defaultCalendar = {
+    var regexes, defaultCalendar = {
         sameDay: "[Today at] LT",
         nextDay: "[Tomorrow at] LT",
         nextWeek: "dddd [at] LT",
         lastDay: "[Yesterday at] LT",
         lastWeek: "[Last] dddd [at] LT",
         sameElse: "L"
-    }, defaultLongDateFormat = {
+    }, formattingTokens = /(\[[^\[]*\])|(\\)?([Hh]mm(ss)?|Mo|MM?M?M?|Do|DDDo|DD?D?D?|ddd?d?|do?|w[o|w]?|W[o|W]?|Qo?|N{1,5}|YYYYYY|YYYYY|YYYY|YY|y{2,4}|yo?|gg(ggg?)?|GG(GGG?)?|e|E|a|A|hh?|HH?|kk?|mm?|ss?|S{1,9}|x|X|zz?|ZZ?|.)/g, localFormattingTokens = /(\[[^\[]*\])|(\\)?(LTS|LT|LL?L?L?|l{1,4})/g, formatFunctions = {}, formatTokenFunctions = {}, defaultLongDateFormat = {
         LTS: "h:mm:ss A",
         LT: "h:mm A",
         L: "MM/DD/YYYY",
@@ -19803,30 +20431,15 @@ function(window, angular, undefined) {
         hh: "%d hours",
         d: "a day",
         dd: "%d days",
+        w: "a week",
+        ww: "%d weeks",
         M: "a month",
         MM: "%d months",
         y: "a year",
         yy: "%d years"
-    }, aliases = {}, priorities = {}, formattingTokens = /(\[[^\[]*\])|(\\)?([Hh]mm(ss)?|Mo|MM?M?M?|Do|DDDo|DD?D?D?|ddd?d?|do?|w[o|w]?|W[o|W]?|Qo?|YYYYYY|YYYYY|YYYY|YY|gg(ggg?)?|GG(GGG?)?|e|E|a|A|hh?|HH?|kk?|mm?|ss?|S{1,9}|x|X|zz?|ZZ?|.)/g, localFormattingTokens = /(\[[^\[]*\])|(\\)?(LTS|LT|LL?L?L?|l{1,4})/g, formatFunctions = {}, formatTokenFunctions = {}, match1 = /\d/, match2 = /\d\d/, match3 = /\d{3}/, match4 = /\d{4}/, match6 = /[+-]?\d{6}/, match1to2 = /\d\d?/, match3to4 = /\d\d\d\d?/, match5to6 = /\d\d\d\d\d\d?/, match1to3 = /\d{1,3}/, match1to4 = /\d{1,4}/, match1to6 = /[+-]?\d{1,6}/, matchUnsigned = /\d+/, matchSigned = /[+-]?\d+/, matchOffset = /Z|[+-]\d\d:?\d\d/gi, matchShortOffset = /Z|[+-]\d\d(?::?\d\d)?/gi, matchTimestamp = /[+-]?\d+(\.\d{1,3})?/, matchWord = /[0-9]{0,256}['a-z\u00A0-\u05FF\u0700-\uD7FF\uF900-\uFDCF\uFDF0-\uFF07\uFF10-\uFFEF]{1,256}|[\u0600-\u06FF\/]{1,256}(\s*?[\u0600-\u06FF]{1,256}){1,2}/i, regexes = {}, tokens = {}, YEAR = 0, MONTH = 1, DATE = 2, HOUR = 3, MINUTE = 4, SECOND = 5, MILLISECOND = 6, WEEK = 7, WEEKDAY = 8;
-    addFormatToken("Y", 0, 0, function() {
-        var y = this.year();
-        return 9999 >= y ? "" + y : "+" + y;
-    }), addFormatToken(0, [ "YY", 2 ], 0, function() {
-        return this.year() % 100;
-    }), addFormatToken(0, [ "YYYY", 4 ], 0, "year"), addFormatToken(0, [ "YYYYY", 5 ], 0, "year"), 
-    addFormatToken(0, [ "YYYYYY", 6, !0 ], 0, "year"), addUnitAlias("year", "y"), addUnitPriority("year", 1), 
-    addRegexToken("Y", matchSigned), addRegexToken("YY", match1to2, match2), addRegexToken("YYYY", match1to4, match4), 
-    addRegexToken("YYYYY", match1to6, match6), addRegexToken("YYYYYY", match1to6, match6), 
-    addParseToken([ "YYYYY", "YYYYYY" ], YEAR), addParseToken("YYYY", function(input, array) {
-        array[YEAR] = 2 === input.length ? hooks.parseTwoDigitYear(input) : toInt(input);
-    }), addParseToken("YY", function(input, array) {
-        array[YEAR] = hooks.parseTwoDigitYear(input);
-    }), addParseToken("Y", function(input, array) {
-        array[YEAR] = parseInt(input, 10);
-    }), hooks.parseTwoDigitYear = function(input) {
-        return toInt(input) + (toInt(input) > 68 ? 1900 : 2e3);
-    };
-    var indexOf, getSetYear = makeGetSet("FullYear", !0);
+    }, aliases = {}, priorities = {}, match1 = /\d/, match2 = /\d\d/, match3 = /\d{3}/, match4 = /\d{4}/, match6 = /[+-]?\d{6}/, match1to2 = /\d\d?/, match3to4 = /\d\d\d\d?/, match5to6 = /\d\d\d\d\d\d?/, match1to3 = /\d{1,3}/, match1to4 = /\d{1,4}/, match1to6 = /[+-]?\d{1,6}/, matchUnsigned = /\d+/, matchSigned = /[+-]?\d+/, matchOffset = /Z|[+-]\d\d:?\d\d/gi, matchShortOffset = /Z|[+-]\d\d(?::?\d\d)?/gi, matchTimestamp = /[+-]?\d+(\.\d{1,3})?/, matchWord = /[0-9]{0,256}['a-z\u00A0-\u05FF\u0700-\uD7FF\uF900-\uFDCF\uFDF0-\uFF07\uFF10-\uFFEF]{1,256}|[\u0600-\u06FF\/]{1,256}(\s*?[\u0600-\u06FF]{1,256}){1,2}/i;
+    regexes = {};
+    var indexOf, tokens = {}, YEAR = 0, MONTH = 1, DATE = 2, HOUR = 3, MINUTE = 4, SECOND = 5, MILLISECOND = 6, WEEK = 7, WEEKDAY = 8;
     indexOf = Array.prototype.indexOf ? Array.prototype.indexOf : function(o) {
         var i;
         for (i = 0; i < this.length; ++i) if (this[i] === o) return i;
@@ -19848,7 +20461,26 @@ function(window, angular, undefined) {
         var month = config._locale.monthsParse(input, token, config._strict);
         null != month ? array[MONTH] = month : getParsingFlags(config).invalidMonth = input;
     });
-    var MONTHS_IN_FORMAT = /D[oD]?(\[[^\[\]]*\]|\s)+MMMM?/, defaultLocaleMonths = "January_February_March_April_May_June_July_August_September_October_November_December".split("_"), defaultLocaleMonthsShort = "Jan_Feb_Mar_Apr_May_Jun_Jul_Aug_Sep_Oct_Nov_Dec".split("_"), defaultMonthsShortRegex = matchWord, defaultMonthsRegex = matchWord;
+    var defaultLocaleMonths = "January_February_March_April_May_June_July_August_September_October_November_December".split("_"), defaultLocaleMonthsShort = "Jan_Feb_Mar_Apr_May_Jun_Jul_Aug_Sep_Oct_Nov_Dec".split("_"), MONTHS_IN_FORMAT = /D[oD]?(\[[^\[\]]*\]|\s)+MMMM?/, defaultMonthsShortRegex = matchWord, defaultMonthsRegex = matchWord;
+    addFormatToken("Y", 0, 0, function() {
+        var y = this.year();
+        return 9999 >= y ? zeroFill(y, 4) : "+" + y;
+    }), addFormatToken(0, [ "YY", 2 ], 0, function() {
+        return this.year() % 100;
+    }), addFormatToken(0, [ "YYYY", 4 ], 0, "year"), addFormatToken(0, [ "YYYYY", 5 ], 0, "year"), 
+    addFormatToken(0, [ "YYYYYY", 6, !0 ], 0, "year"), addUnitAlias("year", "y"), addUnitPriority("year", 1), 
+    addRegexToken("Y", matchSigned), addRegexToken("YY", match1to2, match2), addRegexToken("YYYY", match1to4, match4), 
+    addRegexToken("YYYYY", match1to6, match6), addRegexToken("YYYYYY", match1to6, match6), 
+    addParseToken([ "YYYYY", "YYYYYY" ], YEAR), addParseToken("YYYY", function(input, array) {
+        array[YEAR] = 2 === input.length ? hooks.parseTwoDigitYear(input) : toInt(input);
+    }), addParseToken("YY", function(input, array) {
+        array[YEAR] = hooks.parseTwoDigitYear(input);
+    }), addParseToken("Y", function(input, array) {
+        array[YEAR] = parseInt(input, 10);
+    }), hooks.parseTwoDigitYear = function(input) {
+        return toInt(input) + (toInt(input) > 68 ? 1900 : 2e3);
+    };
+    var getSetYear = makeGetSet("FullYear", !0);
     addFormatToken("w", [ "ww", 2 ], "wo", "week"), addFormatToken("W", [ "WW", 2 ], "Wo", "isoWeek"), 
     addUnitAlias("week", "w"), addUnitAlias("isoWeek", "W"), addUnitPriority("week", 5), 
     addUnitPriority("isoWeek", 5), addRegexToken("w", match1to2), addRegexToken("ww", match1to2, match2), 
@@ -19933,7 +20565,7 @@ function(window, angular, undefined) {
         weekdaysMin: defaultLocaleWeekdaysMin,
         weekdaysShort: defaultLocaleWeekdaysShort,
         meridiemParse: defaultLocaleMeridiemParse
-    }, locales = {}, localeFamilies = {}, extendedIsoRegex = /^\s*((?:[+-]\d{6}|\d{4})-(?:\d\d-\d\d|W\d\d-\d|W\d\d|\d\d\d|\d\d))(?:(T| )(\d\d(?::\d\d(?::\d\d(?:[.,]\d+)?)?)?)([\+\-]\d\d(?::?\d\d)?|\s*Z)?)?$/, basicIsoRegex = /^\s*((?:[+-]\d{6}|\d{4})(?:\d\d\d\d|W\d\d\d|W\d\d|\d\d\d|\d\d))(?:(T| )(\d\d(?:\d\d(?:\d\d(?:[.,]\d+)?)?)?)([\+\-]\d\d(?::?\d\d)?|\s*Z)?)?$/, tzRegex = /Z|[+-]\d\d(?::?\d\d)?/, isoDates = [ [ "YYYYYY-MM-DD", /[+-]\d{6}-\d\d-\d\d/ ], [ "YYYY-MM-DD", /\d{4}-\d\d-\d\d/ ], [ "GGGG-[W]WW-E", /\d{4}-W\d\d-\d/ ], [ "GGGG-[W]WW", /\d{4}-W\d\d/, !1 ], [ "YYYY-DDD", /\d{4}-\d{3}/ ], [ "YYYY-MM", /\d{4}-\d\d/, !1 ], [ "YYYYYYMMDD", /[+-]\d{10}/ ], [ "YYYYMMDD", /\d{8}/ ], [ "GGGG[W]WWE", /\d{4}W\d{3}/ ], [ "GGGG[W]WW", /\d{4}W\d{2}/, !1 ], [ "YYYYDDD", /\d{7}/ ] ], isoTimes = [ [ "HH:mm:ss.SSSS", /\d\d:\d\d:\d\d\.\d+/ ], [ "HH:mm:ss,SSSS", /\d\d:\d\d:\d\d,\d+/ ], [ "HH:mm:ss", /\d\d:\d\d:\d\d/ ], [ "HH:mm", /\d\d:\d\d/ ], [ "HHmmss.SSSS", /\d\d\d\d\d\d\.\d+/ ], [ "HHmmss,SSSS", /\d\d\d\d\d\d,\d+/ ], [ "HHmmss", /\d\d\d\d\d\d/ ], [ "HHmm", /\d\d\d\d/ ], [ "HH", /\d\d/ ] ], aspNetJsonRegex = /^\/?Date\((\-?\d+)/i, rfc2822 = /^(?:(Mon|Tue|Wed|Thu|Fri|Sat|Sun),?\s)?(\d{1,2})\s(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s(\d{2,4})\s(\d\d):(\d\d)(?::(\d\d))?\s(?:(UT|GMT|[ECMP][SD]T)|([Zz])|([+-]\d{4}))$/, obsOffsets = {
+    }, locales = {}, localeFamilies = {}, extendedIsoRegex = /^\s*((?:[+-]\d{6}|\d{4})-(?:\d\d-\d\d|W\d\d-\d|W\d\d|\d\d\d|\d\d))(?:(T| )(\d\d(?::\d\d(?::\d\d(?:[.,]\d+)?)?)?)([+-]\d\d(?::?\d\d)?|\s*Z)?)?$/, basicIsoRegex = /^\s*((?:[+-]\d{6}|\d{4})(?:\d\d\d\d|W\d\d\d|W\d\d|\d\d\d|\d\d|))(?:(T| )(\d\d(?:\d\d(?:\d\d(?:[.,]\d+)?)?)?)([+-]\d\d(?::?\d\d)?|\s*Z)?)?$/, tzRegex = /Z|[+-]\d\d(?::?\d\d)?/, isoDates = [ [ "YYYYYY-MM-DD", /[+-]\d{6}-\d\d-\d\d/ ], [ "YYYY-MM-DD", /\d{4}-\d\d-\d\d/ ], [ "GGGG-[W]WW-E", /\d{4}-W\d\d-\d/ ], [ "GGGG-[W]WW", /\d{4}-W\d\d/, !1 ], [ "YYYY-DDD", /\d{4}-\d{3}/ ], [ "YYYY-MM", /\d{4}-\d\d/, !1 ], [ "YYYYYYMMDD", /[+-]\d{10}/ ], [ "YYYYMMDD", /\d{8}/ ], [ "GGGG[W]WWE", /\d{4}W\d{3}/ ], [ "GGGG[W]WW", /\d{4}W\d{2}/, !1 ], [ "YYYYDDD", /\d{7}/ ], [ "YYYYMM", /\d{6}/, !1 ], [ "YYYY", /\d{4}/, !1 ] ], isoTimes = [ [ "HH:mm:ss.SSSS", /\d\d:\d\d:\d\d\.\d+/ ], [ "HH:mm:ss,SSSS", /\d\d:\d\d:\d\d,\d+/ ], [ "HH:mm:ss", /\d\d:\d\d:\d\d/ ], [ "HH:mm", /\d\d:\d\d/ ], [ "HHmmss.SSSS", /\d\d\d\d\d\d\.\d+/ ], [ "HHmmss,SSSS", /\d\d\d\d\d\d,\d+/ ], [ "HHmmss", /\d\d\d\d\d\d/ ], [ "HHmm", /\d\d\d\d/ ], [ "HH", /\d\d/ ] ], aspNetJsonRegex = /^\/?Date\((-?\d+)/i, rfc2822 = /^(?:(Mon|Tue|Wed|Thu|Fri|Sat|Sun),?\s)?(\d{1,2})\s(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s(\d{2,4})\s(\d\d):(\d\d)(?::(\d\d))?\s(?:(UT|GMT|[ECMP][SD]T)|([Zz])|([+-]\d{4}))$/, obsOffsets = {
         UT: 0,
         GMT: 0,
         EDT: -240,
@@ -19945,7 +20577,7 @@ function(window, angular, undefined) {
         PDT: -420,
         PST: -480
     };
-    hooks.createFromInputFallback = deprecate("value provided is not in a recognized RFC2822 or ISO format. moment construction falls back to js Date(), which is not reliable across all browsers and versions. Non RFC2822/ISO date formats are discouraged and will be removed in an upcoming major release. Please refer to http://momentjs.com/guides/#/warnings/js-date/ for more info.", function(config) {
+    hooks.createFromInputFallback = deprecate("value provided is not in a recognized RFC2822 or ISO format. moment construction falls back to js Date(), which is not reliable across all browsers and versions. Non RFC2822/ISO date formats are discouraged. Please refer to http://momentjs.com/guides/#/warnings/js-date/ for more info.", function(config) {
         config._d = new Date(config._i + (config._useUTC ? " UTC" : ""));
     }), hooks.ISO_8601 = function() {}, hooks.RFC_2822 = function() {};
     var prototypeMin = deprecate("moment().min is deprecated, use moment.max instead. http://momentjs.com/guides/#/warnings/min-max/", function() {
@@ -19963,14 +20595,28 @@ function(window, angular, undefined) {
     });
     var chunkOffset = /([\+\-]|\d\d)/gi;
     hooks.updateOffset = function() {};
-    var aspNetRegex = /^(\-|\+)?(?:(\d*)[. ])?(\d+)\:(\d+)(?:\:(\d+)(\.\d*)?)?$/, isoRegex = /^(-|\+)?P(?:([-+]?[0-9,.]*)Y)?(?:([-+]?[0-9,.]*)M)?(?:([-+]?[0-9,.]*)W)?(?:([-+]?[0-9,.]*)D)?(?:T(?:([-+]?[0-9,.]*)H)?(?:([-+]?[0-9,.]*)M)?(?:([-+]?[0-9,.]*)S)?)?$/;
+    var aspNetRegex = /^(-|\+)?(?:(\d*)[. ])?(\d+):(\d+)(?::(\d+)(\.\d*)?)?$/, isoRegex = /^(-|\+)?P(?:([-+]?[0-9,.]*)Y)?(?:([-+]?[0-9,.]*)M)?(?:([-+]?[0-9,.]*)W)?(?:([-+]?[0-9,.]*)D)?(?:T(?:([-+]?[0-9,.]*)H)?(?:([-+]?[0-9,.]*)M)?(?:([-+]?[0-9,.]*)S)?)?$/;
     createDuration.fn = Duration.prototype, createDuration.invalid = createInvalid$1;
     var add = createAdder(1, "add"), subtract = createAdder(-1, "subtract");
     hooks.defaultFormat = "YYYY-MM-DDTHH:mm:ssZ", hooks.defaultFormatUtc = "YYYY-MM-DDTHH:mm:ss[Z]";
     var lang = deprecate("moment().lang() is deprecated. Instead, use moment().localeData() to get the language configuration. Use moment().locale() to change languages.", function(key) {
         return void 0 === key ? this.localeData() : this.locale(key);
-    });
-    addFormatToken(0, [ "gg", 2 ], 0, function() {
+    }), MS_PER_SECOND = 1e3, MS_PER_MINUTE = 60 * MS_PER_SECOND, MS_PER_HOUR = 60 * MS_PER_MINUTE, MS_PER_400_YEARS = 3506328 * MS_PER_HOUR;
+    addFormatToken("N", 0, 0, "eraAbbr"), addFormatToken("NN", 0, 0, "eraAbbr"), addFormatToken("NNN", 0, 0, "eraAbbr"), 
+    addFormatToken("NNNN", 0, 0, "eraName"), addFormatToken("NNNNN", 0, 0, "eraNarrow"), 
+    addFormatToken("y", [ "y", 1 ], "yo", "eraYear"), addFormatToken("y", [ "yy", 2 ], 0, "eraYear"), 
+    addFormatToken("y", [ "yyy", 3 ], 0, "eraYear"), addFormatToken("y", [ "yyyy", 4 ], 0, "eraYear"), 
+    addRegexToken("N", matchEraAbbr), addRegexToken("NN", matchEraAbbr), addRegexToken("NNN", matchEraAbbr), 
+    addRegexToken("NNNN", matchEraName), addRegexToken("NNNNN", matchEraNarrow), addParseToken([ "N", "NN", "NNN", "NNNN", "NNNNN" ], function(input, array, config, token) {
+        var era = config._locale.erasParse(input, token, config._strict);
+        era ? getParsingFlags(config).era = era : getParsingFlags(config).invalidEra = input;
+    }), addRegexToken("y", matchUnsigned), addRegexToken("yy", matchUnsigned), addRegexToken("yyy", matchUnsigned), 
+    addRegexToken("yyyy", matchUnsigned), addRegexToken("yo", matchEraYearOrdinal), 
+    addParseToken([ "y", "yy", "yyy", "yyyy" ], YEAR), addParseToken([ "yo" ], function(input, array, config, token) {
+        var match;
+        config._locale._eraYearOrdinalRegex && (match = input.match(config._locale._eraYearOrdinalRegex)), 
+        config._locale.eraYearOrdinalParse ? array[YEAR] = config._locale.eraYearOrdinalParse(input, match) : array[YEAR] = parseInt(input, 10);
+    }), addFormatToken(0, [ "gg", 2 ], 0, function() {
         return this.weekYear() % 100;
     }), addFormatToken(0, [ "GG", 2 ], 0, function() {
         return this.isoWeekYear() % 100;
@@ -20024,11 +20670,11 @@ function(window, angular, undefined) {
         return 1e6 * this.millisecond();
     }), addUnitAlias("millisecond", "ms"), addUnitPriority("millisecond", 16), addRegexToken("S", match1to3, match1), 
     addRegexToken("SS", match1to3, match2), addRegexToken("SSS", match1to3, match3);
-    var token;
+    var token, getSetMillisecond;
     for (token = "SSSS"; token.length <= 9; token += "S") addRegexToken(token, matchUnsigned);
     for (token = "S"; token.length <= 9; token += "S") addParseToken(token, parseMs);
-    var getSetMillisecond = makeGetSet("Milliseconds", !1);
-    addFormatToken("z", 0, 0, "zoneAbbr"), addFormatToken("zz", 0, 0, "zoneName");
+    getSetMillisecond = makeGetSet("Milliseconds", !1), addFormatToken("z", 0, 0, "zoneAbbr"), 
+    addFormatToken("zz", 0, 0, "zoneName");
     var proto = Moment.prototype;
     proto.add = add, proto.calendar = calendar$1, proto.clone = clone, proto.diff = diff, 
     proto.endOf = endOf, proto.format = format, proto.from = from, proto.fromNow = fromNow, 
@@ -20039,13 +20685,17 @@ function(window, angular, undefined) {
     proto.max = prototypeMax, proto.min = prototypeMin, proto.parsingFlags = parsingFlags, 
     proto.set = stringSet, proto.startOf = startOf, proto.subtract = subtract, proto.toArray = toArray, 
     proto.toObject = toObject, proto.toDate = toDate, proto.toISOString = toISOString, 
-    proto.inspect = inspect, proto.toJSON = toJSON, proto.toString = toString, proto.unix = unix, 
-    proto.valueOf = valueOf, proto.creationData = creationData, proto.year = getSetYear, 
+    proto.inspect = inspect, "undefined" != typeof Symbol && null != Symbol["for"] && (proto[Symbol["for"]("nodejs.util.inspect.custom")] = function() {
+        return "Moment<" + this.format() + ">";
+    }), proto.toJSON = toJSON, proto.toString = toString, proto.unix = unix, proto.valueOf = valueOf, 
+    proto.creationData = creationData, proto.eraName = getEraName, proto.eraNarrow = getEraNarrow, 
+    proto.eraAbbr = getEraAbbr, proto.eraYear = getEraYear, proto.year = getSetYear, 
     proto.isLeapYear = getIsLeapYear, proto.weekYear = getSetWeekYear, proto.isoWeekYear = getSetISOWeekYear, 
     proto.quarter = proto.quarters = getSetQuarter, proto.month = getSetMonth, proto.daysInMonth = getDaysInMonth, 
     proto.week = proto.weeks = getSetWeek, proto.isoWeek = proto.isoWeeks = getSetISOWeek, 
-    proto.weeksInYear = getWeeksInYear, proto.isoWeeksInYear = getISOWeeksInYear, proto.date = getSetDayOfMonth, 
-    proto.day = proto.days = getSetDayOfWeek, proto.weekday = getSetLocaleDayOfWeek, 
+    proto.weeksInYear = getWeeksInYear, proto.weeksInWeekYear = getWeeksInWeekYear, 
+    proto.isoWeeksInYear = getISOWeeksInYear, proto.isoWeeksInISOWeekYear = getISOWeeksInISOWeekYear, 
+    proto.date = getSetDayOfMonth, proto.day = proto.days = getSetDayOfWeek, proto.weekday = getSetLocaleDayOfWeek, 
     proto.isoWeekday = getSetISODayOfWeek, proto.dayOfYear = getSetDayOfYear, proto.hour = proto.hours = getSetHour, 
     proto.minute = proto.minutes = getSetMinute, proto.second = proto.seconds = getSetSecond, 
     proto.millisecond = proto.milliseconds = getSetMillisecond, proto.utcOffset = getSetOffset, 
@@ -20061,6 +20711,8 @@ function(window, angular, undefined) {
     proto$1.calendar = calendar, proto$1.longDateFormat = longDateFormat, proto$1.invalidDate = invalidDate, 
     proto$1.ordinal = ordinal, proto$1.preparse = preParsePostFormat, proto$1.postformat = preParsePostFormat, 
     proto$1.relativeTime = relativeTime, proto$1.pastFuture = pastFuture, proto$1.set = set, 
+    proto$1.eras = localeEras, proto$1.erasParse = localeErasParse, proto$1.erasConvertYear = localeErasConvertYear, 
+    proto$1.erasAbbrRegex = erasAbbrRegex, proto$1.erasNameRegex = erasNameRegex, proto$1.erasNarrowRegex = erasNarrowRegex, 
     proto$1.months = localeMonths, proto$1.monthsShort = localeMonthsShort, proto$1.monthsParse = localeMonthsParse, 
     proto$1.monthsRegex = monthsRegex, proto$1.monthsShortRegex = monthsShortRegex, 
     proto$1.week = localeWeek, proto$1.firstDayOfYear = localeFirstDayOfYear, proto$1.firstDayOfWeek = localeFirstDayOfWeek, 
@@ -20068,6 +20720,21 @@ function(window, angular, undefined) {
     proto$1.weekdaysParse = localeWeekdaysParse, proto$1.weekdaysRegex = weekdaysRegex, 
     proto$1.weekdaysShortRegex = weekdaysShortRegex, proto$1.weekdaysMinRegex = weekdaysMinRegex, 
     proto$1.isPM = localeIsPM, proto$1.meridiem = localeMeridiem, getSetGlobalLocale("en", {
+        eras: [ {
+            since: "0001-01-01",
+            until: +(1 / 0),
+            offset: 1,
+            name: "Anno Domini",
+            narrow: "AD",
+            abbr: "AD"
+        }, {
+            since: "0000-12-31",
+            until: -(1 / 0),
+            offset: 1,
+            name: "Before Christ",
+            narrow: "BC",
+            abbr: "BC"
+        } ],
         dayOfMonthOrdinalParse: /\d{1,2}(th|st|nd|rd)/,
         ordinal: function(number) {
             var b = number % 10, output = 1 === toInt(number % 100 / 10) ? "th" : 1 === b ? "st" : 2 === b ? "nd" : 3 === b ? "rd" : "th";
@@ -20075,30 +20742,31 @@ function(window, angular, undefined) {
         }
     }), hooks.lang = deprecate("moment.lang is deprecated. Use moment.locale instead.", getSetGlobalLocale), 
     hooks.langData = deprecate("moment.langData is deprecated. Use moment.localeData instead.", getLocale);
-    var mathAbs = Math.abs, asMilliseconds = makeAs("ms"), asSeconds = makeAs("s"), asMinutes = makeAs("m"), asHours = makeAs("h"), asDays = makeAs("d"), asWeeks = makeAs("w"), asMonths = makeAs("M"), asYears = makeAs("y"), milliseconds = makeGetter("milliseconds"), seconds = makeGetter("seconds"), minutes = makeGetter("minutes"), hours = makeGetter("hours"), days = makeGetter("days"), months = makeGetter("months"), years = makeGetter("years"), round = Math.round, thresholds = {
+    var mathAbs = Math.abs, asMilliseconds = makeAs("ms"), asSeconds = makeAs("s"), asMinutes = makeAs("m"), asHours = makeAs("h"), asDays = makeAs("d"), asWeeks = makeAs("w"), asMonths = makeAs("M"), asQuarters = makeAs("Q"), asYears = makeAs("y"), milliseconds = makeGetter("milliseconds"), seconds = makeGetter("seconds"), minutes = makeGetter("minutes"), hours = makeGetter("hours"), days = makeGetter("days"), months = makeGetter("months"), years = makeGetter("years"), round = Math.round, thresholds = {
         ss: 44,
         s: 45,
         m: 45,
         h: 22,
         d: 26,
+        w: null,
         M: 11
     }, abs$1 = Math.abs, proto$2 = Duration.prototype;
     return proto$2.isValid = isValid$1, proto$2.abs = abs, proto$2.add = add$1, proto$2.subtract = subtract$1, 
     proto$2.as = as, proto$2.asMilliseconds = asMilliseconds, proto$2.asSeconds = asSeconds, 
     proto$2.asMinutes = asMinutes, proto$2.asHours = asHours, proto$2.asDays = asDays, 
-    proto$2.asWeeks = asWeeks, proto$2.asMonths = asMonths, proto$2.asYears = asYears, 
-    proto$2.valueOf = valueOf$1, proto$2._bubble = bubble, proto$2.clone = clone$1, 
-    proto$2.get = get$2, proto$2.milliseconds = milliseconds, proto$2.seconds = seconds, 
-    proto$2.minutes = minutes, proto$2.hours = hours, proto$2.days = days, proto$2.weeks = weeks, 
-    proto$2.months = months, proto$2.years = years, proto$2.humanize = humanize, proto$2.toISOString = toISOString$1, 
-    proto$2.toString = toISOString$1, proto$2.toJSON = toISOString$1, proto$2.locale = locale, 
-    proto$2.localeData = localeData, proto$2.toIsoString = deprecate("toIsoString() is deprecated. Please use toISOString() instead (notice the capitals)", toISOString$1), 
+    proto$2.asWeeks = asWeeks, proto$2.asMonths = asMonths, proto$2.asQuarters = asQuarters, 
+    proto$2.asYears = asYears, proto$2.valueOf = valueOf$1, proto$2._bubble = bubble, 
+    proto$2.clone = clone$1, proto$2.get = get$2, proto$2.milliseconds = milliseconds, 
+    proto$2.seconds = seconds, proto$2.minutes = minutes, proto$2.hours = hours, proto$2.days = days, 
+    proto$2.weeks = weeks, proto$2.months = months, proto$2.years = years, proto$2.humanize = humanize, 
+    proto$2.toISOString = toISOString$1, proto$2.toString = toISOString$1, proto$2.toJSON = toISOString$1, 
+    proto$2.locale = locale, proto$2.localeData = localeData, proto$2.toIsoString = deprecate("toIsoString() is deprecated. Please use toISOString() instead (notice the capitals)", toISOString$1), 
     proto$2.lang = lang, addFormatToken("X", 0, 0, "unix"), addFormatToken("x", 0, 0, "valueOf"), 
     addRegexToken("x", matchSigned), addRegexToken("X", matchTimestamp), addParseToken("X", function(input, array, config) {
-        config._d = new Date(1e3 * parseFloat(input, 10));
+        config._d = new Date(1e3 * parseFloat(input));
     }), addParseToken("x", function(input, array, config) {
         config._d = new Date(toInt(input));
-    }), hooks.version = "2.22.1", setHookCallback(createLocal), hooks.fn = proto, hooks.min = min, 
+    }), hooks.version = "2.29.1", setHookCallback(createLocal), hooks.fn = proto, hooks.min = min, 
     hooks.max = max, hooks.now = now, hooks.utc = createUTC, hooks.unix = createUnix, 
     hooks.months = listMonths, hooks.isDate = isDate, hooks.locale = getSetGlobalLocale, 
     hooks.invalid = createInvalid, hooks.duration = createDuration, hooks.isMoment = isMoment, 
@@ -20115,7 +20783,7 @@ function(window, angular, undefined) {
         TIME: "HH:mm",
         TIME_SECONDS: "HH:mm:ss",
         TIME_MS: "HH:mm:ss.SSS",
-        WEEK: "YYYY-[W]WW",
+        WEEK: "GGGG-[W]WW",
         MONTH: "YYYY-MM"
     }, hooks;
 }), function(window, angular, undefined) {
@@ -21170,8 +21838,8 @@ function(window, angular, undefined) {
             });
         }
     };
-} ]), angular.module("fluro.video", [ "fluro.config", "fluro.util", "youtube-embed" ]), 
-angular.module("fluro.video").directive("fluroVideo", [ "$compile", "Fluro", function($compile, Fluro) {
+} ]), angular.module("fluro.video", [ "fluro.config", "fluro.util", "fluro.asset", "youtube-embed" ]), 
+angular.module("fluro.video").directive("fluroVideo", [ "$compile", "Fluro", "FluroAsset", function($compile, Fluro, FluroAsset) {
     return {
         restrict: "E",
         replace: !0,
@@ -21184,7 +21852,6 @@ angular.module("fluro.video").directive("fluroVideo", [ "$compile", "Fluro", fun
         link: function($scope, $element, $attrs) {
             $scope.$watch("model", function() {
                 $scope.params = $scope.ngParams(), $scope.params || ($scope.params = {
-                    controls: 0,
                     autoplay: 0,
                     modestbranding: 1,
                     playsinline: 1,
@@ -21193,7 +21860,7 @@ angular.module("fluro.video").directive("fluroVideo", [ "$compile", "Fluro", fun
                     byline: 0,
                     portrait: 0,
                     title: 0
-                });
+                }), $scope.poster = FluroAsset.posterUrl($scope.model._id, 1024, 768);
                 var template;
                 switch ($element.empty(), $scope.model.assetType) {
                   case "youtube":
@@ -21209,7 +21876,8 @@ angular.module("fluro.video").directive("fluroVideo", [ "$compile", "Fluro", fun
                     break;
 
                   case "upload":
-                    $scope.playUrl = Fluro.apiURL + "/get/" + $scope.model._id, template = '<div class="embed-responsive embed-responsive-16by9"><video class="embed-responsive-item" controls><source ng-src="{{playUrl | trustfluro}}" type="{{model.mimetype}}"></video></div>';
+                    $scope.playUrl = Fluro.apiURL + "/get/" + $scope.model._id, Fluro.token && ($scope.playUrl = $scope.playUrl + "?access_token=" + Fluro.token), 
+                    template = '<div class="embed-responsive embed-responsive-16by9"><video class="embed-responsive-item" poster="{{poster}}" controls><source ng-src="{{playUrl | trustfluro}}" type="{{model.mimetype}}"></video></div>';
                 }
                 if (template) {
                     var cTemplate = $compile(template)($scope);
@@ -21281,13 +21949,23 @@ angular.module("fluro.video").service("VideoTools", [ "$http", function($http) {
         restrict: "E",
         replace: !0,
         scope: {
-            model: "=ngModel"
+            model: "=ngModel",
+            params: "=ngParams"
         },
         template: '<span><img ng-src="{{thumbnailUrl}}"/></span>',
         controller: [ "$scope", "$http", "Fluro", "VideoTools", function($scope, $http, Fluro, VideoTools) {
-            $scope.$watch("model", function(model) {
-                $scope.thumbnailUrl = Fluro.apiURL + "/get/" + model._id + "/poster";
-            });
+            function update() {
+                var params = $scope.params || {};
+                if ($scope.model) {
+                    var url = Fluro.apiURL + "/get/" + $scope.model._id + "/poster";
+                    Fluro.token && (params.access_token = Fluro.token);
+                    var queryParams = _.map(params, function(v, k) {
+                        return encodeURIComponent(k) + "=" + encodeURIComponent(v);
+                    }).join("&");
+                    queryParams.length && (url += "?" + queryParams), $scope.thumbnailUrl = url;
+                }
+            }
+            $scope.$watch("model", update), $scope.$watch("params", update, !0);
         } ]
     };
 }), angular.module("fluro.video").service("VimeoEmbedSettings", [ "$http", function($http) {
@@ -27733,8 +28411,8 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
             }
         }).flatten().compact().value();
     }, controller.retrieveSelectableRealms = function(action, type, parentType, noCache) {
-        if (!$rootScope.user) return [];
         var deferred = $q.defer();
+        if (!$rootScope.user) return deferred.resolve([]), deferred.promise;
         if (controller.isFluroAdmin()) FluroContent.endpoint("realm/tree", !1, noCache).query({}).$promise.then(deferred.resolve, deferred.reject); else {
             var permissionSets = $rootScope.user.permissionSets, searchString = action + " " + type, selectableRealms = _.chain(permissionSets).filter(function(realmSet, key) {
                 var includedFromParent, includesType = _.includes(realmSet.permissions, searchString);
@@ -27744,22 +28422,22 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
                 }
                 var shouldInclude = includesType || includedFromParent;
                 return shouldInclude;
-            }).map(retrieveSubRealms).flattenDeep().value(), cleanArray = angular.copy(selectableRealms), realmTree = _.chain(cleanArray).sortBy(function(realm) {
-                return realm.trail && realm.trail.length ? realm.trail.length : 0;
-            }).reduce(function(results, realm) {
-                if (realm.trail && realm.trail.length) {
-                    var parentID = String(realm.trail[realm.trail.length - 1]), parent = _.find(cleanArray, function(pRealm) {
-                        return String(pRealm._id) == parentID;
-                    });
-                    if (!parent) return results.push(realm), results;
-                    parent.children || (parent.children = []);
-                    var alreadyIncluded = -1 != parent.children.indexOf(realm);
-                    alreadyIncluded || (parent.children.push(realm), parent.children = _.sortBy(parent.children, function(child) {
-                        return child.title;
-                    }));
-                } else results.push(realm);
-                return results;
-            }, []).value();
+            }).map(retrieveSubRealms).flattenDeep().map(function(realm) {
+                return _.pick(realm, [ "title", "definition", "_discriminator", "_discriminatorType", "trail", "color", "bgColor", "_id" ]);
+            }).uniq(function(realm) {
+                return realm._id;
+            }).sortBy(function(realm) {
+                return realm.trail ? realm.trail.length : 0;
+            }).reduce(function(set, realm) {
+                var lastRealmParent = _.last(realm.trail);
+                return set[lastRealmParent] && (set[lastRealmParent].children || (set[lastRealmParent].children = []), 
+                set[lastRealmParent].children.push(realm), realm.nested = !0), set[realm._id] = realm, 
+                set;
+            }, {}).values().filter(function(realm) {
+                return !realm.nested;
+            }).sortBy(function(realm) {
+                return realm.title;
+            }).value(), realmTree = angular.copy(selectableRealms);
             deferred.resolve(realmTree);
         }
         return deferred.promise;
@@ -27833,6 +28511,14 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         if (contentAccountID && contentAccountID._id && (contentAccountID = contentAccountID._id), 
         contentAccountID && contentAccountID != userAccountID) return !1;
         if (controller.isFluroAdmin()) return !0;
+        if (item._type && "realm" != item._type && item.realms && !item.realms.length) return !0;
+        if (item.assignedTo && item.assignedTo.length) {
+            var intersect = _.intersection(_.chain(item.assignedTo).map(function(id) {
+                return id && id._id ? id._id : id;
+            }).compact().value(), $rootScope.user.contacts);
+            if (intersect && intersect.length) return !0;
+        }
+        item.assignedToTeam && item.assignedToTeam.length;
         var parentType, definitionName = item._type;
         item.definition && (definitionName = item.definition, parentType = item._type);
         var author = controller.isAuthor(item);
@@ -27860,6 +28546,13 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
     }, controller.canViewItem = function(item, user) {
         if (!$rootScope.user) return !1;
         if (controller.isFluroAdmin()) return !0;
+        if (item.assignedTo && item.assignedTo.length) {
+            var intersect = _.intersection(_.chain(item.assignedTo).map(function(id) {
+                return id && id._id ? id._id : id;
+            }).compact().value(), $rootScope.user.contacts);
+            return intersect && intersect.length;
+        }
+        if (item.assignedToTeam && item.assignedToTeam.length, item._type && "realm" != item._type && item.realms && !item.realms.length) return !0;
         var parentType, definitionName = item._type;
         item.definition && (definitionName = item.definition, parentType = item._type);
         var author = controller.isAuthor(item);
@@ -27896,6 +28589,7 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         if (contentAccountID && contentAccountID._id && (contentAccountID = contentAccountID._id), 
         contentAccountID && contentAccountID != userAccountID) return !1;
         if (controller.isFluroAdmin()) return !0;
+        if (item._type && "realm" != item._type && item.realms && !item.realms.length) return !0;
         var parentType, definitionName = item._type;
         item.definition && (definitionName = item.definition, parentType = item._type);
         var author = controller.isAuthor(item);
@@ -27928,83 +28622,175 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
     "object" == typeof exports && "undefined" != typeof module ? module.exports = factory() : "function" == typeof define && define.amd ? define(factory) : global.validator = factory();
 }(this, function() {
     "use strict";
+    function _typeof(obj) {
+        "@babel/helpers - typeof";
+        return (_typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(obj) {
+            return typeof obj;
+        } : function(obj) {
+            return obj && "function" == typeof Symbol && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj;
+        })(obj);
+    }
+    function _slicedToArray(arr, i) {
+        return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray(arr, i) || _nonIterableRest();
+    }
+    function _toConsumableArray(arr) {
+        return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread();
+    }
+    function _arrayWithoutHoles(arr) {
+        return Array.isArray(arr) ? _arrayLikeToArray(arr) : void 0;
+    }
+    function _arrayWithHoles(arr) {
+        return Array.isArray(arr) ? arr : void 0;
+    }
+    function _iterableToArray(iter) {
+        return "undefined" != typeof Symbol && Symbol.iterator in Object(iter) ? Array.from(iter) : void 0;
+    }
+    function _iterableToArrayLimit(arr, i) {
+        if ("undefined" != typeof Symbol && Symbol.iterator in Object(arr)) {
+            var _arr = [], _n = !0, _d = !1, _e = void 0;
+            try {
+                for (var _s, _i = arr[Symbol.iterator](); !(_n = (_s = _i.next()).done) && (_arr.push(_s.value), 
+                !i || _arr.length !== i); _n = !0) ;
+            } catch (err) {
+                _d = !0, _e = err;
+            } finally {
+                try {
+                    _n || null == _i["return"] || _i["return"]();
+                } finally {
+                    if (_d) throw _e;
+                }
+            }
+            return _arr;
+        }
+    }
+    function _unsupportedIterableToArray(o, minLen) {
+        if (o) {
+            if ("string" == typeof o) return _arrayLikeToArray(o, minLen);
+            var n = Object.prototype.toString.call(o).slice(8, -1);
+            return "Object" === n && o.constructor && (n = o.constructor.name), "Map" === n || "Set" === n ? Array.from(o) : "Arguments" === n || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n) ? _arrayLikeToArray(o, minLen) : void 0;
+        }
+    }
+    function _arrayLikeToArray(arr, len) {
+        (null == len || len > arr.length) && (len = arr.length);
+        for (var i = 0, arr2 = new Array(len); len > i; i++) arr2[i] = arr[i];
+        return arr2;
+    }
+    function _nonIterableSpread() {
+        throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+    function _nonIterableRest() {
+        throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+    }
+    function _createForOfIteratorHelper(o, allowArrayLike) {
+        var it;
+        if ("undefined" == typeof Symbol || null == o[Symbol.iterator]) {
+            if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && "number" == typeof o.length) {
+                it && (o = it);
+                var i = 0, F = function() {};
+                return {
+                    s: F,
+                    n: function() {
+                        return i >= o.length ? {
+                            done: !0
+                        } : {
+                            done: !1,
+                            value: o[i++]
+                        };
+                    },
+                    e: function(e) {
+                        throw e;
+                    },
+                    f: F
+                };
+            }
+            throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+        }
+        var err, normalCompletion = !0, didErr = !1;
+        return {
+            s: function() {
+                it = o[Symbol.iterator]();
+            },
+            n: function() {
+                var step = it.next();
+                return normalCompletion = step.done, step;
+            },
+            e: function(e) {
+                didErr = !0, err = e;
+            },
+            f: function() {
+                try {
+                    normalCompletion || null == it["return"] || it["return"]();
+                } finally {
+                    if (didErr) throw err;
+                }
+            }
+        };
+    }
     function assertString(input) {
         var isString = "string" == typeof input || input instanceof String;
-        if (!isString) throw new TypeError("This library (validator.js) validates strings only");
+        if (!isString) {
+            var invalidType = _typeof(input);
+            throw null === input ? invalidType = "null" : "object" === invalidType && (invalidType = input.constructor.name), 
+            new TypeError("Expected a string but received a ".concat(invalidType));
+        }
     }
     function toDate(date) {
         return assertString(date), date = Date.parse(date), isNaN(date) ? null : new Date(date);
     }
+    function isFloat(str, options) {
+        assertString(str), options = options || {};
+        var _float = new RegExp("^(?:[-+])?(?:[0-9]+)?(?:\\".concat(options.locale ? decimal[options.locale] : ".", "[0-9]*)?(?:[eE][\\+\\-]?(?:[0-9]+))?$"));
+        if ("" === str || "." === str || "-" === str || "+" === str) return !1;
+        var value = parseFloat(str.replace(",", "."));
+        return _float.test(str) && (!options.hasOwnProperty("min") || value >= options.min) && (!options.hasOwnProperty("max") || value <= options.max) && (!options.hasOwnProperty("lt") || value < options.lt) && (!options.hasOwnProperty("gt") || value > options.gt);
+    }
     function toFloat(str) {
-        return assertString(str), parseFloat(str);
+        return isFloat(str) ? parseFloat(str) : NaN;
     }
     function toInt(str, radix) {
         return assertString(str), parseInt(str, radix || 10);
     }
     function toBoolean(str, strict) {
-        return assertString(str), strict ? "1" === str || "true" === str : "0" !== str && "false" !== str && "" !== str;
+        return assertString(str), strict ? "1" === str || /^true$/i.test(str) : "0" !== str && !/^false$/i.test(str) && "" !== str;
     }
     function equals(str, comparison) {
         return assertString(str), str === comparison;
     }
-    function toString(input) {
-        return "object" === ("undefined" == typeof input ? "undefined" : _typeof(input)) && null !== input ? input = "function" == typeof input.toString ? input.toString() : "[object Object]" : (null === input || "undefined" == typeof input || isNaN(input) && !input.length) && (input = ""), 
+    function toString$1(input) {
+        return "object" === _typeof(input) && null !== input ? input = "function" == typeof input.toString ? input.toString() : "[object Object]" : (null === input || "undefined" == typeof input || isNaN(input) && !input.length) && (input = ""), 
         String(input);
     }
-    function contains(str, elem) {
-        return assertString(str), str.indexOf(toString(elem)) >= 0;
+    function merge() {
+        var obj = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : {}, defaults = arguments.length > 1 ? arguments[1] : void 0;
+        for (var key in defaults) "undefined" == typeof obj[key] && (obj[key] = defaults[key]);
+        return obj;
+    }
+    function contains(str, elem, options) {
+        return assertString(str), options = merge(options, defaulContainsOptions), options.ignoreCase ? str.toLowerCase().indexOf(toString$1(elem).toLowerCase()) >= 0 : str.indexOf(toString$1(elem)) >= 0;
     }
     function matches(str, pattern, modifiers) {
         return assertString(str), "[object RegExp]" !== Object.prototype.toString.call(pattern) && (pattern = new RegExp(pattern, modifiers)), 
         pattern.test(str);
     }
-    function merge() {
-        var obj = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : {}, defaults = arguments[1];
-        for (var key in defaults) "undefined" == typeof obj[key] && (obj[key] = defaults[key]);
-        return obj;
-    }
     function isByteLength(str, options) {
         assertString(str);
-        var min = void 0, max = void 0;
-        "object" === ("undefined" == typeof options ? "undefined" : _typeof(options)) ? (min = options.min || 0, 
-        max = options.max) : (min = arguments[1], max = arguments[2]);
+        var min, max;
+        "object" === _typeof(options) ? (min = options.min || 0, max = options.max) : (min = arguments[1], 
+        max = arguments[2]);
         var len = encodeURI(str).split(/%..|./).length - 1;
         return len >= min && ("undefined" == typeof max || max >= len);
     }
     function isFQDN(str, options) {
         assertString(str), options = merge(options, default_fqdn_options), options.allow_trailing_dot && "." === str[str.length - 1] && (str = str.substring(0, str.length - 1));
-        for (var parts = str.split("."), i = 0; i < parts.length; i++) if (parts[i].length > 63) return !1;
+        var parts = str.split("."), tld = parts[parts.length - 1];
         if (options.require_tld) {
-            var tld = parts.pop();
-            if (!parts.length || !/^([a-z\u00a1-\uffff]{2,}|xn[a-z0-9-]{2,})$/i.test(tld)) return !1;
-            if (/[\s\u2002-\u200B\u202F\u205F\u3000\uFEFF\uDB40\uDC20]/.test(tld)) return !1;
+            if (parts.length < 2) return !1;
+            if (!/^([a-z\u00a1-\uffff]{2,}|xn[a-z0-9-]{2,})$/i.test(tld)) return !1;
+            if (/[\s\u2002-\u200B\u202F\u205F\u3000\uFEFF\uDB40\uDC20\u00A9\uFFFD]/.test(tld)) return !1;
         }
-        for (var part, _i = 0; _i < parts.length; _i++) {
-            if (part = parts[_i], options.allow_underscores && (part = part.replace(/_/g, "")), 
-            !/^[a-z\u00a1-\uffff0-9-]+$/i.test(part)) return !1;
-            if (/[\uff01-\uff5e]/.test(part)) return !1;
-            if ("-" === part[0] || "-" === part[part.length - 1]) return !1;
-        }
-        return !0;
-    }
-    function isEmail(str, options) {
-        if (assertString(str), options = merge(options, default_email_options), options.require_display_name || options.allow_display_name) {
-            var display_email = str.match(displayName);
-            if (display_email) str = display_email[1]; else if (options.require_display_name) return !1;
-        }
-        var parts = str.split("@"), domain = parts.pop(), user = parts.join("@"), lower_domain = domain.toLowerCase();
-        if (("gmail.com" === lower_domain || "googlemail.com" === lower_domain) && (user = user.toLowerCase()), 
-        !isByteLength(user, {
-            max: 64
-        }) || !isByteLength(domain, {
-            max: 254
-        })) return !1;
-        if (!isFQDN(domain, {
-            require_tld: options.require_tld
-        })) return !1;
-        if ('"' === user[0]) return user = user.slice(1, user.length - 1), options.allow_utf8_local_part ? quotedEmailUserUtf8.test(user) : quotedEmailUser.test(user);
-        for (var pattern = options.allow_utf8_local_part ? emailUserUtf8Part : emailUserPart, user_parts = user.split("."), i = 0; i < user_parts.length; i++) if (!pattern.test(user_parts[i])) return !1;
-        return !0;
+        return !options.allow_numeric_tld && /^\d+$/.test(tld) ? !1 : parts.every(function(part) {
+            return part.length > 63 ? !1 : /^[a-z_\u00a1-\uffff0-9-]+$/i.test(part) ? /[\uff01-\uff5e]/.test(part) ? !1 : /^-|-$/.test(part) ? !1 : !options.allow_underscores && /_/.test(part) ? !1 : !0 : !1;
+        });
     }
     function isIP(str) {
         var version = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : "";
@@ -28017,7 +28803,13 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
             return parts[3] <= 255;
         }
         if ("6" === version) {
-            var blocks = str.split(":"), foundOmissionBlock = !1, foundIPv4TransitionBlock = isIP(blocks[blocks.length - 1], 4), expectedNumberOfBlocks = foundIPv4TransitionBlock ? 7 : 8;
+            var addressAndZone = [ str ];
+            if (str.includes("%")) {
+                if (addressAndZone = str.split("%"), 2 !== addressAndZone.length) return !1;
+                if (!addressAndZone[0].includes(":")) return !1;
+                if ("" === addressAndZone[1]) return !1;
+            }
+            var blocks = addressAndZone[0].split(":"), foundOmissionBlock = !1, foundIPv4TransitionBlock = isIP(blocks[blocks.length - 1], 4), expectedNumberOfBlocks = foundIPv4TransitionBlock ? 7 : 8;
             if (blocks.length > expectedNumberOfBlocks) return !1;
             if ("::" === str) return !0;
             "::" === str.substr(0, 2) ? (blocks.shift(), blocks.shift(), foundOmissionBlock = !0) : "::" === str.substr(str.length - 2) && (blocks.pop(), 
@@ -28030,6 +28822,56 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         }
         return !1;
     }
+    function validateDisplayName(display_name) {
+        var trim_quotes = display_name.match(/^"(.+)"$/i), display_name_without_quotes = trim_quotes ? trim_quotes[1] : display_name;
+        if (!display_name_without_quotes.trim()) return !1;
+        var contains_illegal = /[\.";<>]/.test(display_name_without_quotes);
+        if (contains_illegal) {
+            if (!trim_quotes) return !1;
+            var all_start_with_back_slash = display_name_without_quotes.split('"').length === display_name_without_quotes.split('\\"').length;
+            if (!all_start_with_back_slash) return !1;
+        }
+        return !0;
+    }
+    function isEmail(str, options) {
+        if (assertString(str), options = merge(options, default_email_options), options.require_display_name || options.allow_display_name) {
+            var display_email = str.match(splitNameAddress);
+            if (display_email) {
+                var display_name, _display_email = _slicedToArray(display_email, 3);
+                if (display_name = _display_email[1], str = _display_email[2], display_name.endsWith(" ") && (display_name = display_name.substr(0, display_name.length - 1)), 
+                !validateDisplayName(display_name)) return !1;
+            } else if (options.require_display_name) return !1;
+        }
+        if (!options.ignore_max_length && str.length > defaultMaxEmailLength) return !1;
+        var parts = str.split("@"), domain = parts.pop(), user = parts.join("@"), lower_domain = domain.toLowerCase();
+        if (options.domain_specific_validation && ("gmail.com" === lower_domain || "googlemail.com" === lower_domain)) {
+            user = user.toLowerCase();
+            var username = user.split("+")[0];
+            if (!isByteLength(username.replace(".", ""), {
+                min: 6,
+                max: 30
+            })) return !1;
+            for (var _user_parts = username.split("."), i = 0; i < _user_parts.length; i++) if (!gmailUserPart.test(_user_parts[i])) return !1;
+        }
+        if (!(options.ignore_max_length !== !1 || isByteLength(user, {
+            max: 64
+        }) && isByteLength(domain, {
+            max: 254
+        }))) return !1;
+        if (!isFQDN(domain, {
+            require_tld: options.require_tld
+        })) {
+            if (!options.allow_ip_domain) return !1;
+            if (!isIP(domain)) {
+                if (!domain.startsWith("[") || !domain.endsWith("]")) return !1;
+                var noBracketdomain = domain.substr(1, domain.length - 2);
+                if (0 === noBracketdomain.length || !isIP(noBracketdomain)) return !1;
+            }
+        }
+        if ('"' === user[0]) return user = user.slice(1, user.length - 1), options.allow_utf8_local_part ? quotedEmailUserUtf8.test(user) : quotedEmailUser.test(user);
+        for (var pattern = options.allow_utf8_local_part ? emailUserUtf8Part : emailUserPart, user_parts = user.split("."), _i = 0; _i < user_parts.length; _i++) if (!pattern.test(user_parts[_i])) return !1;
+        return options.blacklisted_chars && -1 !== user.search(new RegExp("[".concat(options.blacklisted_chars, "]+"), "g")) ? !1 : !0;
+    }
     function isRegExp(obj) {
         return "[object RegExp]" === Object.prototype.toString.call(obj);
     }
@@ -28041,49 +28883,107 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         return !1;
     }
     function isURL(url, options) {
-        if (assertString(url), !url || url.length >= 2083 || /[\s<>]/.test(url)) return !1;
+        if (assertString(url), !url || /[\s<>]/.test(url)) return !1;
         if (0 === url.indexOf("mailto:")) return !1;
-        options = merge(options, default_url_options);
-        var protocol = void 0, auth = void 0, host = void 0, hostname = void 0, port = void 0, port_str = void 0, split = void 0, ipv6 = void 0;
+        if (options = merge(options, default_url_options), options.validate_length && url.length >= 2083) return !1;
+        var protocol, auth, host, hostname, port, port_str, split, ipv6;
         if (split = url.split("#"), url = split.shift(), split = url.split("?"), url = split.shift(), 
         split = url.split("://"), split.length > 1) {
-            if (protocol = split.shift(), options.require_valid_protocol && -1 === options.protocols.indexOf(protocol)) return !1;
+            if (protocol = split.shift().toLowerCase(), options.require_valid_protocol && -1 === options.protocols.indexOf(protocol)) return !1;
         } else {
             if (options.require_protocol) return !1;
-            options.allow_protocol_relative_urls && "//" === url.substr(0, 2) && (split[0] = url.substr(2));
+            if ("//" === url.substr(0, 2)) {
+                if (!options.allow_protocol_relative_urls) return !1;
+                split[0] = url.substr(2);
+            }
         }
         if (url = split.join("://"), "" === url) return !1;
         if (split = url.split("/"), url = split.shift(), "" === url && !options.require_host) return !0;
-        if (split = url.split("@"), split.length > 1 && (auth = split.shift(), auth.indexOf(":") >= 0 && auth.split(":").length > 2)) return !1;
+        if (split = url.split("@"), split.length > 1) {
+            if (options.disallow_auth) return !1;
+            if (auth = split.shift(), -1 === auth.indexOf(":") || auth.indexOf(":") >= 0 && auth.split(":").length > 2) return !1;
+        }
         hostname = split.join("@"), port_str = null, ipv6 = null;
         var ipv6_match = hostname.match(wrapped_ipv6);
-        return ipv6_match ? (host = "", ipv6 = ipv6_match[1], port_str = ipv6_match[2] || null) : (split = hostname.split(":"), 
-        host = split.shift(), split.length && (port_str = split.join(":"))), null !== port_str && (port = parseInt(port_str, 10), 
-        !/^[0-9]+$/.test(port_str) || 0 >= port || port > 65535) ? !1 : isIP(host) || isFQDN(host, options) || ipv6 && isIP(ipv6, 6) ? (host = host || ipv6, 
+        if (ipv6_match ? (host = "", ipv6 = ipv6_match[1], port_str = ipv6_match[2] || null) : (split = hostname.split(":"), 
+        host = split.shift(), split.length && (port_str = split.join(":"))), null !== port_str) {
+            if (port = parseInt(port_str, 10), !/^[0-9]+$/.test(port_str) || 0 >= port || port > 65535) return !1;
+        } else if (options.require_port) return !1;
+        return isIP(host) || isFQDN(host, options) || ipv6 && isIP(ipv6, 6) ? (host = host || ipv6, 
         options.host_whitelist && !checkHost(host, options.host_whitelist) ? !1 : options.host_blacklist && checkHost(host, options.host_blacklist) ? !1 : !0) : !1;
     }
-    function isMACAddress(str) {
-        return assertString(str), macAddress.test(str);
+    function isMACAddress(str, options) {
+        return assertString(str), options && options.no_colons ? macAddressNoColons.test(str) : macAddress.test(str) || macAddressWithHyphen.test(str) || macAddressWithSpaces.test(str) || macAddressWithDots.test(str);
+    }
+    function isIPRange(str) {
+        assertString(str);
+        var parts = str.split("/");
+        return 2 !== parts.length ? !1 : subnetMaybe.test(parts[1]) ? parts[1].length > 1 && parts[1].startsWith("0") ? !1 : isIP(parts[0], 4) && parts[1] <= 32 && parts[1] >= 0 : !1;
+    }
+    function isValidFormat(format) {
+        return /(^(y{4}|y{2})[\/-](m{1,2})[\/-](d{1,2})$)|(^(m{1,2})[\/-](d{1,2})[\/-]((y{4}|y{2})$))|(^(d{1,2})[\/-](m{1,2})[\/-]((y{4}|y{2})$))/gi.test(format);
+    }
+    function zip(date, format) {
+        for (var zippedArr = [], len = Math.min(date.length, format.length), i = 0; len > i; i++) zippedArr.push([ date[i], format[i] ]);
+        return zippedArr;
+    }
+    function isDate(input, options) {
+        if (options = "string" == typeof options ? merge({
+            format: options
+        }, default_date_options) : merge(options, default_date_options), "string" == typeof input && isValidFormat(options.format)) {
+            var _step, formatDelimiter = options.delimiters.find(function(delimiter) {
+                return -1 !== options.format.indexOf(delimiter);
+            }), dateDelimiter = options.strictMode ? formatDelimiter : options.delimiters.find(function(delimiter) {
+                return -1 !== input.indexOf(delimiter);
+            }), dateAndFormat = zip(input.split(dateDelimiter), options.format.toLowerCase().split(formatDelimiter)), dateObj = {}, _iterator = _createForOfIteratorHelper(dateAndFormat);
+            try {
+                for (_iterator.s(); !(_step = _iterator.n()).done; ) {
+                    var _step$value = _slicedToArray(_step.value, 2), dateWord = _step$value[0], formatWord = _step$value[1];
+                    if (dateWord.length !== formatWord.length) return !1;
+                    dateObj[formatWord.charAt(0)] = dateWord;
+                }
+            } catch (err) {
+                _iterator.e(err);
+            } finally {
+                _iterator.f();
+            }
+            return new Date("".concat(dateObj.m, "/").concat(dateObj.d, "/").concat(dateObj.y)).getDate() === +dateObj.d;
+        }
+        return options.strictMode ? !1 : "[object Date]" === Object.prototype.toString.call(input) && isFinite(input);
     }
     function isBoolean(str) {
         return assertString(str), [ "true", "false", "1", "0" ].indexOf(str) >= 0;
     }
-    function isAlpha(str) {
-        var locale = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : "en-US";
-        if (assertString(str), locale in alpha) return alpha[locale].test(str);
-        throw new Error("Invalid locale '" + locale + "'");
+    function isLocale(str) {
+        return assertString(str), "en_US_POSIX" === str || "ca_ES_VALENCIA" === str ? !0 : localeReg.test(str);
+    }
+    function isAlpha(_str) {
+        var locale = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : "en-US", options = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : {};
+        assertString(_str);
+        var str = _str, ignore = options.ignore;
+        if (ignore) if (ignore instanceof RegExp) str = str.replace(ignore, ""); else {
+            if ("string" != typeof ignore) throw new Error("ignore should be instance of a String or RegExp");
+            str = str.replace(new RegExp("[".concat(ignore.replace(/[-[\]{}()*+?.,\\^$|#\\s]/g, "\\$&"), "]"), "g"), "");
+        }
+        if (locale in alpha) return alpha[locale].test(str);
+        throw new Error("Invalid locale '".concat(locale, "'"));
     }
     function isAlphanumeric(str) {
         var locale = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : "en-US";
         if (assertString(str), locale in alphanumeric) return alphanumeric[locale].test(str);
-        throw new Error("Invalid locale '" + locale + "'");
+        throw new Error("Invalid locale '".concat(locale, "'"));
     }
-    function isNumeric(str) {
-        return assertString(str), numeric.test(str);
+    function isNumeric(str, options) {
+        return assertString(str), options && options.no_symbols ? numericNoSymbols.test(str) : new RegExp("^[+-]?([0-9]*[".concat((options || {}).locale ? decimal[options.locale] : ".", "])?[0-9]+$")).test(str);
+    }
+    function isPassportNumber(str, countryCode) {
+        assertString(str);
+        var normalizedStr = str.replace(/\s/g, "").toUpperCase();
+        return countryCode.toUpperCase() in passportRegexByCountryCode && passportRegexByCountryCode[countryCode].test(normalizedStr);
     }
     function isInt(str, options) {
         assertString(str), options = options || {};
-        var regex = options.hasOwnProperty("allow_leading_zeroes") && !options.allow_leading_zeroes ? int : intLeadingZeroes, minCheckPassed = !options.hasOwnProperty("min") || str >= options.min, maxCheckPassed = !options.hasOwnProperty("max") || str <= options.max, ltCheckPassed = !options.hasOwnProperty("lt") || str < options.lt, gtCheckPassed = !options.hasOwnProperty("gt") || str > options.gt;
+        var regex = options.hasOwnProperty("allow_leading_zeroes") && !options.allow_leading_zeroes ? _int : intLeadingZeroes, minCheckPassed = !options.hasOwnProperty("min") || str >= options.min, maxCheckPassed = !options.hasOwnProperty("max") || str <= options.max, ltCheckPassed = !options.hasOwnProperty("lt") || str < options.lt, gtCheckPassed = !options.hasOwnProperty("gt") || str > options.gt;
         return regex.test(str) && minCheckPassed && maxCheckPassed && ltCheckPassed && gtCheckPassed;
     }
     function isPort(str) {
@@ -28097,6 +28997,18 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
     }
     function isUppercase(str) {
         return assertString(str), str === str.toUpperCase();
+    }
+    function isIMEI(str, options) {
+        assertString(str), options = options || {};
+        var imeiRegex = imeiRegexWithoutHypens;
+        if (options.allow_hyphens && (imeiRegex = imeiRegexWithHypens), !imeiRegex.test(str)) return !1;
+        str = str.replace(/-/g, "");
+        for (var sum = 0, mul = 2, l = 14, i = 0; l > i; i++) {
+            var digit = str.substring(l - i - 1, l - i), tp = parseInt(digit, 10) * mul;
+            sum += tp >= 10 ? tp % 10 + 1 : tp, 1 === mul ? mul += 1 : mul -= 1;
+        }
+        var chk = (10 - sum % 10) % 10;
+        return chk !== parseInt(str.substring(14, 15), 10) ? !1 : !0;
     }
     function isAscii(str) {
         return assertString(str), ascii.test(str);
@@ -28113,26 +29025,29 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
     function isMultibyte(str) {
         return assertString(str), multibyte.test(str);
     }
+    function multilineRegexp(parts, flags) {
+        var regexpAsStringLiteral = parts.join("");
+        return new RegExp(regexpAsStringLiteral, flags);
+    }
+    function isSemVer(str) {
+        return assertString(str), semanticVersioningRegex.test(str);
+    }
     function isSurrogatePair(str) {
         return assertString(str), surrogatePair.test(str);
     }
-    function isFloat(str, options) {
-        assertString(str), options = options || {};
-        var float = new RegExp("^(?:[-+])?(?:[0-9]+)?(?:\\" + (options.locale ? decimal[options.locale] : ".") + "[0-9]*)?(?:[eE][\\+\\-]?(?:[0-9]+))?$");
-        if ("" === str || "." === str || "-" === str || "+" === str) return !1;
-        var value = parseFloat(str.replace(",", "."));
-        return float.test(str) && (!options.hasOwnProperty("min") || value >= options.min) && (!options.hasOwnProperty("max") || value <= options.max) && (!options.hasOwnProperty("lt") || value < options.lt) && (!options.hasOwnProperty("gt") || value > options.gt);
-    }
     function decimalRegExp(options) {
-        var regExp = new RegExp("^[-+]?([0-9]+)?(\\" + decimal[options.locale] + "[0-9]{" + options.decimal_digits + "})" + (options.force_decimal ? "" : "?") + "$");
+        var regExp = new RegExp("^[-+]?([0-9]+)?(\\".concat(decimal[options.locale], "[0-9]{").concat(options.decimal_digits, "})").concat(options.force_decimal ? "" : "?", "$"));
         return regExp;
     }
     function isDecimal(str, options) {
-        if (assertString(str), options = merge(options, default_decimal_options), options.locale in decimal) return !blacklist.includes(str.replace(/ /g, "")) && decimalRegExp(options).test(str);
-        throw new Error("Invalid locale '" + options.locale + "'");
+        if (assertString(str), options = merge(options, default_decimal_options), options.locale in decimal) return !includes(blacklist, str.replace(/ /g, "")) && decimalRegExp(options).test(str);
+        throw new Error("Invalid locale '".concat(options.locale, "'"));
     }
     function isHexadecimal(str) {
         return assertString(str), hexadecimal.test(str);
+    }
+    function isOctal(str) {
+        return assertString(str), octal.test(str);
     }
     function isDivisibleBy(str, num) {
         return assertString(str), toFloat(str) % parseInt(num, 10) === 0;
@@ -28140,33 +29055,78 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
     function isHexColor(str) {
         return assertString(str), hexcolor.test(str);
     }
+    function isRgbColor(str) {
+        var includePercentValues = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : !0;
+        return assertString(str), includePercentValues ? rgbColor.test(str) || rgbaColor.test(str) || rgbColorPercent.test(str) || rgbaColorPercent.test(str) : rgbColor.test(str) || rgbaColor.test(str);
+    }
+    function isHSL(str) {
+        return assertString(str), hslcomma.test(str) || hslspace.test(str);
+    }
     function isISRC(str) {
         return assertString(str), isrc.test(str);
+    }
+    function hasValidIbanFormat(str) {
+        var strippedStr = str.replace(/[\s\-]+/gi, "").toUpperCase(), isoCountryCode = strippedStr.slice(0, 2).toUpperCase();
+        return isoCountryCode in ibanRegexThroughCountryCode && ibanRegexThroughCountryCode[isoCountryCode].test(strippedStr);
+    }
+    function hasValidIbanChecksum(str) {
+        var strippedStr = str.replace(/[^A-Z0-9]+/gi, "").toUpperCase(), rearranged = strippedStr.slice(4) + strippedStr.slice(0, 4), alphaCapsReplacedWithDigits = rearranged.replace(/[A-Z]/g, function(_char) {
+            return _char.charCodeAt(0) - 55;
+        }), remainder = alphaCapsReplacedWithDigits.match(/\d{1,7}/g).reduce(function(acc, value) {
+            return Number(acc + value) % 97;
+        }, "");
+        return 1 === remainder;
+    }
+    function isIBAN(str) {
+        return assertString(str), hasValidIbanFormat(str) && hasValidIbanChecksum(str);
+    }
+    function isBIC(str) {
+        return assertString(str), isBICReg.test(str);
     }
     function isMD5(str) {
         return assertString(str), md5.test(str);
     }
     function isHash(str, algorithm) {
         assertString(str);
-        var hash = new RegExp("^[a-f0-9]{" + lengths[algorithm] + "}$");
+        var hash = new RegExp("^[a-fA-F0-9]{".concat(lengths[algorithm], "}$"));
         return hash.test(str);
     }
-    function isJSON(str) {
+    function isBase64(str, options) {
+        assertString(str), options = merge(options, defaultBase64Options);
+        var len = str.length;
+        if (options.urlSafe) return urlSafeBase64.test(str);
+        if (len % 4 !== 0 || notBase64.test(str)) return !1;
+        var firstPaddingChar = str.indexOf("=");
+        return -1 === firstPaddingChar || firstPaddingChar === len - 1 || firstPaddingChar === len - 2 && "=" === str[len - 1];
+    }
+    function isJWT(str) {
+        assertString(str);
+        var dotSplit = str.split("."), len = dotSplit.length;
+        return len > 3 || 2 > len ? !1 : dotSplit.reduce(function(acc, currElem) {
+            return acc && isBase64(currElem, {
+                urlSafe: !0
+            });
+        }, !0);
+    }
+    function isJSON(str, options) {
         assertString(str);
         try {
+            options = merge(options, default_json_options);
+            var primitives = [];
+            options.allow_primitives && (primitives = [ null, !1, !0 ]);
             var obj = JSON.parse(str);
-            return !!obj && "object" === ("undefined" == typeof obj ? "undefined" : _typeof(obj));
+            return primitives.includes(obj) || !!obj && "object" === _typeof(obj);
         } catch (e) {}
         return !1;
     }
-    function isEmpty(str) {
-        return assertString(str), 0 === str.length;
+    function isEmpty(str, options) {
+        return assertString(str), options = merge(options, default_is_empty_options), 0 === (options.ignore_whitespace ? str.trim().length : str.length);
     }
     function isLength(str, options) {
         assertString(str);
-        var min = void 0, max = void 0;
-        "object" === ("undefined" == typeof options ? "undefined" : _typeof(options)) ? (min = options.min || 0, 
-        max = options.max) : (min = arguments[1], max = arguments[2]);
+        var min, max;
+        "object" === _typeof(options) ? (min = options.min || 0, max = options.max) : (min = arguments[1] || 0, 
+        max = arguments[2]);
         var surrogatePairs = str.match(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g) || [], len = str.length - surrogatePairs.length;
         return len >= min && ("undefined" == typeof max || max >= len);
     }
@@ -28193,28 +29153,55 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
     }
     function isIn(str, options) {
         assertString(str);
-        var i = void 0;
+        var i;
         if ("[object Array]" === Object.prototype.toString.call(options)) {
             var array = [];
-            for (i in options) ({}).hasOwnProperty.call(options, i) && (array[i] = toString(options[i]));
+            for (i in options) ({}).hasOwnProperty.call(options, i) && (array[i] = toString$1(options[i]));
             return array.indexOf(str) >= 0;
         }
-        return "object" === ("undefined" == typeof options ? "undefined" : _typeof(options)) ? options.hasOwnProperty(str) : options && "function" == typeof options.indexOf ? options.indexOf(str) >= 0 : !1;
+        return "object" === _typeof(options) ? options.hasOwnProperty(str) : options && "function" == typeof options.indexOf ? options.indexOf(str) >= 0 : !1;
     }
     function isCreditCard(str) {
         assertString(str);
         var sanitized = str.replace(/[- ]+/g, "");
         if (!creditCard.test(sanitized)) return !1;
-        for (var sum = 0, digit = void 0, tmpNum = void 0, shouldDouble = void 0, i = sanitized.length - 1; i >= 0; i--) digit = sanitized.substring(i, i + 1), 
+        for (var digit, tmpNum, shouldDouble, sum = 0, i = sanitized.length - 1; i >= 0; i--) digit = sanitized.substring(i, i + 1), 
         tmpNum = parseInt(digit, 10), shouldDouble ? (tmpNum *= 2, sum += tmpNum >= 10 ? tmpNum % 10 + 1 : tmpNum) : sum += tmpNum, 
         shouldDouble = !shouldDouble;
         return !!(sum % 10 === 0 ? sanitized : !1);
     }
+    function isIdentityCard(str, locale) {
+        if (assertString(str), locale in validators) return validators[locale](str);
+        if ("any" === locale) {
+            for (var key in validators) if (validators.hasOwnProperty(key)) {
+                var validator = validators[key];
+                if (validator(str)) return !0;
+            }
+            return !1;
+        }
+        throw new Error("Invalid locale '".concat(locale, "'"));
+    }
+    function getPositionWeightThroughLengthAndIndex(length, index) {
+        return length === LENGTH_EAN_8 ? index % 2 === 0 ? 3 : 1 : index % 2 === 0 ? 1 : 3;
+    }
+    function calculateCheckDigit(ean) {
+        var checksum = ean.slice(0, -1).split("").map(function(_char, index) {
+            return Number(_char) * getPositionWeightThroughLengthAndIndex(ean.length, index);
+        }).reduce(function(acc, partialSum) {
+            return acc + partialSum;
+        }, 0), remainder = 10 - checksum % 10;
+        return 10 > remainder ? remainder : 0;
+    }
+    function isEAN(str) {
+        assertString(str);
+        var actualCheckDigit = Number(str.slice(-1));
+        return validEanRegex.test(str) && actualCheckDigit === calculateCheckDigit(str);
+    }
     function isISIN(str) {
         if (assertString(str), !isin.test(str)) return !1;
-        for (var checksumStr = str.replace(/[A-Z]/g, function(character) {
+        for (var digit, tmpNum, checksumStr = str.replace(/[A-Z]/g, function(character) {
             return parseInt(character, 36);
-        }), sum = 0, digit = void 0, tmpNum = void 0, shouldDouble = !0, i = checksumStr.length - 2; i >= 0; i--) digit = checksumStr.substring(i, i + 1), 
+        }), sum = 0, shouldDouble = !0, i = checksumStr.length - 2; i >= 0; i--) digit = checksumStr.substring(i, i + 1), 
         tmpNum = parseInt(digit, 10), shouldDouble ? (tmpNum *= 2, sum += tmpNum >= 10 ? tmpNum + 1 : tmpNum) : sum += tmpNum, 
         shouldDouble = !shouldDouble;
         return parseInt(str.substr(str.length - 1), 10) === (1e4 - sum) % 10;
@@ -28222,7 +29209,7 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
     function isISBN(str) {
         var version = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : "";
         if (assertString(str), version = String(version), !version) return isISBN(str, 10) || isISBN(str, 13);
-        var sanitized = str.replace(/[\s-]+/g, ""), checksum = 0, i = void 0;
+        var i, sanitized = str.replace(/[\s-]+/g, ""), checksum = 0;
         if ("10" === version) {
             if (!isbn10Maybe.test(sanitized)) return !1;
             for (i = 0; 9 > i; i++) checksum += (i + 1) * sanitized.charAt(i);
@@ -28240,67 +29227,546 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         var testIssn = issn;
         if (testIssn = options.require_hyphen ? testIssn.replace("?", "") : testIssn, testIssn = options.case_sensitive ? new RegExp(testIssn) : new RegExp(testIssn, "i"), 
         !testIssn.test(str)) return !1;
-        var issnDigits = str.replace("-", ""), position = 8, checksum = 0, _iteratorNormalCompletion = !0, _didIteratorError = !1, _iteratorError = void 0;
-        try {
-            for (var _step, _iterator = issnDigits[Symbol.iterator](); !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = !0) {
-                var digit = _step.value, digitValue = "X" === digit.toUpperCase() ? 10 : +digit;
-                checksum += digitValue * position, --position;
-            }
-        } catch (err) {
-            _didIteratorError = !0, _iteratorError = err;
-        } finally {
-            try {
-                !_iteratorNormalCompletion && _iterator["return"] && _iterator["return"]();
-            } finally {
-                if (_didIteratorError) throw _iteratorError;
-            }
+        for (var digits = str.replace("-", "").toUpperCase(), checksum = 0, i = 0; i < digits.length; i++) {
+            var digit = digits[i];
+            checksum += ("X" === digit ? 10 : +digit) * (8 - i);
         }
         return checksum % 11 === 0;
     }
+    function iso7064Check(str) {
+        for (var checkvalue = 10, i = 0; i < str.length - 1; i++) checkvalue = (parseInt(str[i], 10) + checkvalue) % 10 === 0 ? 9 : (parseInt(str[i], 10) + checkvalue) % 10 * 2 % 11;
+        return checkvalue = 1 === checkvalue ? 0 : 11 - checkvalue, checkvalue === parseInt(str[10], 10);
+    }
+    function luhnCheck(str) {
+        for (var checksum = 0, second = !1, i = str.length - 1; i >= 0; i--) {
+            if (second) {
+                var product = 2 * parseInt(str[i], 10);
+                checksum += product > 9 ? product.toString().split("").map(function(a) {
+                    return parseInt(a, 10);
+                }).reduce(function(a, b) {
+                    return a + b;
+                }, 0) : product;
+            } else checksum += parseInt(str[i], 10);
+            second = !second;
+        }
+        return checksum % 10 === 0;
+    }
+    function reverseMultiplyAndSum(digits, base) {
+        for (var total = 0, i = 0; i < digits.length; i++) total += digits[i] * (base - i);
+        return total;
+    }
+    function verhoeffCheck(str) {
+        for (var d_table = [ [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ], [ 1, 2, 3, 4, 0, 6, 7, 8, 9, 5 ], [ 2, 3, 4, 0, 1, 7, 8, 9, 5, 6 ], [ 3, 4, 0, 1, 2, 8, 9, 5, 6, 7 ], [ 4, 0, 1, 2, 3, 9, 5, 6, 7, 8 ], [ 5, 9, 8, 7, 6, 0, 4, 3, 2, 1 ], [ 6, 5, 9, 8, 7, 1, 0, 4, 3, 2 ], [ 7, 6, 5, 9, 8, 2, 1, 0, 4, 3 ], [ 8, 7, 6, 5, 9, 3, 2, 1, 0, 4 ], [ 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 ] ], p_table = [ [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ], [ 1, 5, 7, 6, 2, 8, 3, 0, 9, 4 ], [ 5, 8, 0, 3, 7, 9, 6, 1, 4, 2 ], [ 8, 9, 1, 6, 0, 4, 3, 5, 2, 7 ], [ 9, 4, 5, 3, 1, 2, 6, 8, 7, 0 ], [ 4, 2, 8, 6, 5, 7, 3, 9, 0, 1 ], [ 2, 7, 9, 3, 8, 0, 6, 4, 1, 5 ], [ 7, 0, 4, 6, 9, 1, 3, 2, 5, 8 ] ], str_copy = str.split("").reverse().join(""), checksum = 0, i = 0; i < str_copy.length; i++) checksum = d_table[checksum][p_table[i % 8][parseInt(str_copy[i], 10)]];
+        return 0 === checksum;
+    }
+    function bgBgCheck(tin) {
+        var century_year = tin.slice(0, 2), month = parseInt(tin.slice(2, 4), 10);
+        month > 40 ? (month -= 40, century_year = "20".concat(century_year)) : month > 20 ? (month -= 20, 
+        century_year = "18".concat(century_year)) : century_year = "19".concat(century_year), 
+        10 > month && (month = "0".concat(month));
+        var date = "".concat(century_year, "/").concat(month, "/").concat(tin.slice(4, 6));
+        if (!isDate(date, "YYYY/MM/DD")) return !1;
+        for (var digits = tin.split("").map(function(a) {
+            return parseInt(a, 10);
+        }), multip_lookup = [ 2, 4, 8, 5, 10, 9, 7, 3, 6 ], checksum = 0, i = 0; i < multip_lookup.length; i++) checksum += digits[i] * multip_lookup[i];
+        return checksum = checksum % 11 === 10 ? 0 : checksum % 11, checksum === digits[9];
+    }
+    function csCzCheck(tin) {
+        tin = tin.replace(/\W/, "");
+        var full_year = parseInt(tin.slice(0, 2), 10);
+        if (10 === tin.length) full_year = 54 > full_year ? "20".concat(full_year) : "19".concat(full_year); else {
+            if ("000" === tin.slice(6)) return !1;
+            if (!(54 > full_year)) return !1;
+            full_year = "19".concat(full_year);
+        }
+        3 === full_year.length && (full_year = [ full_year.slice(0, 2), "0", full_year.slice(2) ].join(""));
+        var month = parseInt(tin.slice(2, 4), 10);
+        if (month > 50 && (month -= 50), month > 20) {
+            if (parseInt(full_year, 10) < 2004) return !1;
+            month -= 20;
+        }
+        10 > month && (month = "0".concat(month));
+        var date = "".concat(full_year, "/").concat(month, "/").concat(tin.slice(4, 6));
+        if (!isDate(date, "YYYY/MM/DD")) return !1;
+        if (10 === tin.length && parseInt(tin, 10) % 11 !== 0) {
+            var checkdigit = parseInt(tin.slice(0, 9), 10) % 11;
+            if (!(parseInt(full_year, 10) < 1986 && 10 === checkdigit)) return !1;
+            if (0 !== parseInt(tin.slice(9), 10)) return !1;
+        }
+        return !0;
+    }
+    function deAtCheck(tin) {
+        return luhnCheck(tin);
+    }
+    function deDeCheck(tin) {
+        for (var digits = tin.split("").map(function(a) {
+            return parseInt(a, 10);
+        }), occurences = [], i = 0; i < digits.length - 1; i++) {
+            occurences.push("");
+            for (var j = 0; j < digits.length - 1; j++) digits[i] === digits[j] && (occurences[i] += j);
+        }
+        if (occurences = occurences.filter(function(a) {
+            return a.length > 1;
+        }), 2 !== occurences.length && 3 !== occurences.length) return !1;
+        if (3 === occurences[0].length) {
+            for (var trip_locations = occurences[0].split("").map(function(a) {
+                return parseInt(a, 10);
+            }), recurrent = 0, _i = 0; _i < trip_locations.length - 1; _i++) trip_locations[_i] + 1 === trip_locations[_i + 1] && (recurrent += 1);
+            if (2 === recurrent) return !1;
+        }
+        return iso7064Check(tin);
+    }
+    function dkDkCheck(tin) {
+        tin = tin.replace(/\W/, "");
+        var year = parseInt(tin.slice(4, 6), 10), century_digit = tin.slice(6, 7);
+        switch (century_digit) {
+          case "0":
+          case "1":
+          case "2":
+          case "3":
+            year = "19".concat(year);
+            break;
+
+          case "4":
+          case "9":
+            year = 37 > year ? "20".concat(year) : "19".concat(year);
+            break;
+
+          default:
+            if (37 > year) year = "20".concat(year); else {
+                if (!(year > 58)) return !1;
+                year = "18".concat(year);
+            }
+        }
+        3 === year.length && (year = [ year.slice(0, 2), "0", year.slice(2) ].join(""));
+        var date = "".concat(year, "/").concat(tin.slice(2, 4), "/").concat(tin.slice(0, 2));
+        if (!isDate(date, "YYYY/MM/DD")) return !1;
+        for (var digits = tin.split("").map(function(a) {
+            return parseInt(a, 10);
+        }), checksum = 0, weight = 4, i = 0; 9 > i; i++) checksum += digits[i] * weight, 
+        weight -= 1, 1 === weight && (weight = 7);
+        return checksum %= 11, 1 === checksum ? !1 : 0 === checksum ? 0 === digits[9] : digits[9] === 11 - checksum;
+    }
+    function elCyCheck(tin) {
+        for (var digits = tin.slice(0, 8).split("").map(function(a) {
+            return parseInt(a, 10);
+        }), checksum = 0, i = 1; i < digits.length; i += 2) checksum += digits[i];
+        for (var _i2 = 0; _i2 < digits.length; _i2 += 2) digits[_i2] < 2 ? checksum += 1 - digits[_i2] : (checksum += 2 * (digits[_i2] - 2) + 5, 
+        digits[_i2] > 4 && (checksum += 2));
+        return String.fromCharCode(checksum % 26 + 65) === tin.charAt(8);
+    }
+    function elGrCheck(tin) {
+        for (var digits = tin.split("").map(function(a) {
+            return parseInt(a, 10);
+        }), checksum = 0, i = 0; 8 > i; i++) checksum += digits[i] * Math.pow(2, 8 - i);
+        return checksum % 11 === digits[8];
+    }
+    function enIeCheck(tin) {
+        var checksum = reverseMultiplyAndSum(tin.split("").slice(0, 7).map(function(a) {
+            return parseInt(a, 10);
+        }), 8);
+        return 9 === tin.length && "W" !== tin[8] && (checksum += 9 * (tin[8].charCodeAt(0) - 64)), 
+        checksum %= 23, 0 === checksum ? "W" === tin[7].toUpperCase() : tin[7].toUpperCase() === String.fromCharCode(64 + checksum);
+    }
+    function enUsGetPrefixes() {
+        var prefixes = [];
+        for (var location in enUsCampusPrefix) enUsCampusPrefix.hasOwnProperty(location) && prefixes.push.apply(prefixes, _toConsumableArray(enUsCampusPrefix[location]));
+        return prefixes;
+    }
+    function enUsCheck(tin) {
+        return -1 !== enUsGetPrefixes().indexOf(tin.substr(0, 2));
+    }
+    function esEsCheck(tin) {
+        var chars = tin.toUpperCase().split("");
+        if (isNaN(parseInt(chars[0], 10)) && chars.length > 1) {
+            var lead_replace = 0;
+            switch (chars[0]) {
+              case "Y":
+                lead_replace = 1;
+                break;
+
+              case "Z":
+                lead_replace = 2;
+            }
+            chars.splice(0, 1, lead_replace);
+        } else for (;chars.length < 9; ) chars.unshift(0);
+        var lookup = [ "T", "R", "W", "A", "G", "M", "Y", "F", "P", "D", "X", "B", "N", "J", "Z", "S", "Q", "V", "H", "L", "C", "K", "E" ];
+        chars = chars.join("");
+        var checksum = parseInt(chars.slice(0, 8), 10) % 23;
+        return chars[8] === lookup[checksum];
+    }
+    function etEeCheck(tin) {
+        var full_year = tin.slice(1, 3), century_digit = tin.slice(0, 1);
+        switch (century_digit) {
+          case "1":
+          case "2":
+            full_year = "18".concat(full_year);
+            break;
+
+          case "3":
+          case "4":
+            full_year = "19".concat(full_year);
+            break;
+
+          default:
+            full_year = "20".concat(full_year);
+        }
+        var date = "".concat(full_year, "/").concat(tin.slice(3, 5), "/").concat(tin.slice(5, 7));
+        if (!isDate(date, "YYYY/MM/DD")) return !1;
+        for (var digits = tin.split("").map(function(a) {
+            return parseInt(a, 10);
+        }), checksum = 0, weight = 1, i = 0; 10 > i; i++) checksum += digits[i] * weight, 
+        weight += 1, 10 === weight && (weight = 1);
+        if (checksum % 11 === 10) {
+            checksum = 0, weight = 3;
+            for (var _i3 = 0; 10 > _i3; _i3++) checksum += digits[_i3] * weight, weight += 1, 
+            10 === weight && (weight = 1);
+            if (checksum % 11 === 10) return 0 === digits[10];
+        }
+        return checksum % 11 === digits[10];
+    }
+    function fiFiCheck(tin) {
+        var full_year = tin.slice(4, 6), century_symbol = tin.slice(6, 7);
+        switch (century_symbol) {
+          case "+":
+            full_year = "18".concat(full_year);
+            break;
+
+          case "-":
+            full_year = "19".concat(full_year);
+            break;
+
+          default:
+            full_year = "20".concat(full_year);
+        }
+        var date = "".concat(full_year, "/").concat(tin.slice(2, 4), "/").concat(tin.slice(0, 2));
+        if (!isDate(date, "YYYY/MM/DD")) return !1;
+        var checksum = parseInt(tin.slice(0, 6) + tin.slice(7, 10), 10) % 31;
+        if (10 > checksum) return checksum === parseInt(tin.slice(10), 10);
+        checksum -= 10;
+        var letters_lookup = [ "A", "B", "C", "D", "E", "F", "H", "J", "K", "L", "M", "N", "P", "R", "S", "T", "U", "V", "W", "X", "Y" ];
+        return letters_lookup[checksum] === tin.slice(10);
+    }
+    function frBeCheck(tin) {
+        if ("00" !== tin.slice(2, 4) || "00" !== tin.slice(4, 6)) {
+            var date = "".concat(tin.slice(0, 2), "/").concat(tin.slice(2, 4), "/").concat(tin.slice(4, 6));
+            if (!isDate(date, "YY/MM/DD")) return !1;
+        }
+        var checksum = 97 - parseInt(tin.slice(0, 9), 10) % 97, checkdigits = parseInt(tin.slice(9, 11), 10);
+        return checksum !== checkdigits && (checksum = 97 - parseInt("2".concat(tin.slice(0, 9)), 10) % 97, 
+        checksum !== checkdigits) ? !1 : !0;
+    }
+    function frFrCheck(tin) {
+        tin = tin.replace(/\s/g, "");
+        var checksum = parseInt(tin.slice(0, 10), 10) % 511, checkdigits = parseInt(tin.slice(10, 13), 10);
+        return checksum === checkdigits;
+    }
+    function frLuCheck(tin) {
+        var date = "".concat(tin.slice(0, 4), "/").concat(tin.slice(4, 6), "/").concat(tin.slice(6, 8));
+        return isDate(date, "YYYY/MM/DD") && luhnCheck(tin.slice(0, 12)) ? verhoeffCheck("".concat(tin.slice(0, 11)).concat(tin[12])) : !1;
+    }
+    function hrHrCheck(tin) {
+        return iso7064Check(tin);
+    }
+    function huHuCheck(tin) {
+        for (var digits = tin.split("").map(function(a) {
+            return parseInt(a, 10);
+        }), checksum = 8, i = 1; 9 > i; i++) checksum += digits[i] * (i + 1);
+        return checksum % 11 === digits[9];
+    }
+    function itItNameCheck(name) {
+        for (var vowelflag = !1, xflag = !1, i = 0; 3 > i; i++) if (!vowelflag && /[AEIOU]/.test(name[i])) vowelflag = !0; else if (!xflag && vowelflag && "X" === name[i]) xflag = !0; else if (i > 0) {
+            if (vowelflag && !xflag && !/[AEIOU]/.test(name[i])) return !1;
+            if (xflag && !/X/.test(name[i])) return !1;
+        }
+        return !0;
+    }
+    function itItCheck(tin) {
+        var chars = tin.toUpperCase().split("");
+        if (!itItNameCheck(chars.slice(0, 3))) return !1;
+        if (!itItNameCheck(chars.slice(3, 6))) return !1;
+        for (var number_locations = [ 6, 7, 9, 10, 12, 13, 14 ], number_replace = {
+            L: "0",
+            M: "1",
+            N: "2",
+            P: "3",
+            Q: "4",
+            R: "5",
+            S: "6",
+            T: "7",
+            U: "8",
+            V: "9"
+        }, _i4 = 0, _number_locations = number_locations; _i4 < _number_locations.length; _i4++) {
+            var i = _number_locations[_i4];
+            chars[i] in number_replace && chars.splice(i, 1, number_replace[chars[i]]);
+        }
+        var month_replace = {
+            A: "01",
+            B: "02",
+            C: "03",
+            D: "04",
+            E: "05",
+            H: "06",
+            L: "07",
+            M: "08",
+            P: "09",
+            R: "10",
+            S: "11",
+            T: "12"
+        }, month = month_replace[chars[8]], day = parseInt(chars[9] + chars[10], 10);
+        day > 40 && (day -= 40), 10 > day && (day = "0".concat(day));
+        var date = "".concat(chars[6]).concat(chars[7], "/").concat(month, "/").concat(day);
+        if (!isDate(date, "YY/MM/DD")) return !1;
+        for (var checksum = 0, _i5 = 1; _i5 < chars.length - 1; _i5 += 2) {
+            var char_to_int = parseInt(chars[_i5], 10);
+            isNaN(char_to_int) && (char_to_int = chars[_i5].charCodeAt(0) - 65), checksum += char_to_int;
+        }
+        for (var odd_convert = {
+            A: 1,
+            B: 0,
+            C: 5,
+            D: 7,
+            E: 9,
+            F: 13,
+            G: 15,
+            H: 17,
+            I: 19,
+            J: 21,
+            K: 2,
+            L: 4,
+            M: 18,
+            N: 20,
+            O: 11,
+            P: 3,
+            Q: 6,
+            R: 8,
+            S: 12,
+            T: 14,
+            U: 16,
+            V: 10,
+            W: 22,
+            X: 25,
+            Y: 24,
+            Z: 23,
+            0: 1,
+            1: 0
+        }, _i6 = 0; _i6 < chars.length - 1; _i6 += 2) {
+            var _char_to_int = 0;
+            if (chars[_i6] in odd_convert) _char_to_int = odd_convert[chars[_i6]]; else {
+                var multiplier = parseInt(chars[_i6], 10);
+                _char_to_int = 2 * multiplier + 1, multiplier > 4 && (_char_to_int += 2);
+            }
+            checksum += _char_to_int;
+        }
+        return String.fromCharCode(65 + checksum % 26) !== chars[15] ? !1 : !0;
+    }
+    function lvLvCheck(tin) {
+        tin = tin.replace(/\W/, "");
+        var day = tin.slice(0, 2);
+        if ("32" !== day) {
+            var month = tin.slice(2, 4);
+            if ("00" !== month) {
+                var full_year = tin.slice(4, 6);
+                switch (tin[6]) {
+                  case "0":
+                    full_year = "18".concat(full_year);
+                    break;
+
+                  case "1":
+                    full_year = "19".concat(full_year);
+                    break;
+
+                  default:
+                    full_year = "20".concat(full_year);
+                }
+                var date = "".concat(full_year, "/").concat(tin.slice(2, 4), "/").concat(day);
+                if (!isDate(date, "YYYY/MM/DD")) return !1;
+            }
+            for (var checksum = 1101, multip_lookup = [ 1, 6, 3, 7, 9, 10, 5, 8, 4, 2 ], i = 0; i < tin.length - 1; i++) checksum -= parseInt(tin[i], 10) * multip_lookup[i];
+            return parseInt(tin[10], 10) === checksum % 11;
+        }
+        return !0;
+    }
+    function mtMtCheck(tin) {
+        if (9 !== tin.length) {
+            for (var chars = tin.toUpperCase().split(""); chars.length < 8; ) chars.unshift(0);
+            switch (tin[7]) {
+              case "A":
+              case "P":
+                if (0 === parseInt(chars[6], 10)) return !1;
+                break;
+
+              default:
+                var first_part = parseInt(chars.join("").slice(0, 5), 10);
+                if (first_part > 32e3) return !1;
+                var second_part = parseInt(chars.join("").slice(5, 7), 10);
+                if (first_part === second_part) return !1;
+            }
+        }
+        return !0;
+    }
+    function nlNlCheck(tin) {
+        return reverseMultiplyAndSum(tin.split("").slice(0, 8).map(function(a) {
+            return parseInt(a, 10);
+        }), 9) % 11 === parseInt(tin[8], 10);
+    }
+    function plPlCheck(tin) {
+        if (10 === tin.length) {
+            for (var lookup = [ 6, 5, 7, 2, 3, 4, 5, 6, 7 ], _checksum = 0, i = 0; i < lookup.length; i++) _checksum += parseInt(tin[i], 10) * lookup[i];
+            return _checksum %= 11, 10 === _checksum ? !1 : _checksum === parseInt(tin[9], 10);
+        }
+        var full_year = tin.slice(0, 2), month = parseInt(tin.slice(2, 4), 10);
+        month > 80 ? (full_year = "18".concat(full_year), month -= 80) : month > 60 ? (full_year = "22".concat(full_year), 
+        month -= 60) : month > 40 ? (full_year = "21".concat(full_year), month -= 40) : month > 20 ? (full_year = "20".concat(full_year), 
+        month -= 20) : full_year = "19".concat(full_year), 10 > month && (month = "0".concat(month));
+        var date = "".concat(full_year, "/").concat(month, "/").concat(tin.slice(4, 6));
+        if (!isDate(date, "YYYY/MM/DD")) return !1;
+        for (var checksum = 0, multiplier = 1, _i7 = 0; _i7 < tin.length - 1; _i7++) checksum += parseInt(tin[_i7], 10) * multiplier % 10, 
+        multiplier += 2, multiplier > 10 ? multiplier = 1 : 5 === multiplier && (multiplier += 2);
+        return checksum = 10 - checksum % 10, checksum === parseInt(tin[10], 10);
+    }
+    function ptPtCheck(tin) {
+        var checksum = 11 - reverseMultiplyAndSum(tin.split("").slice(0, 8).map(function(a) {
+            return parseInt(a, 10);
+        }), 9) % 11;
+        return checksum > 9 ? 0 === parseInt(tin[8], 10) : checksum === parseInt(tin[8], 10);
+    }
+    function roRoCheck(tin) {
+        if ("9000" !== tin.slice(0, 4)) {
+            var full_year = tin.slice(1, 3);
+            switch (tin[0]) {
+              case "1":
+              case "2":
+                full_year = "19".concat(full_year);
+                break;
+
+              case "3":
+              case "4":
+                full_year = "18".concat(full_year);
+                break;
+
+              case "5":
+              case "6":
+                full_year = "20".concat(full_year);
+            }
+            var date = "".concat(full_year, "/").concat(tin.slice(3, 5), "/").concat(tin.slice(5, 7));
+            if (8 === date.length) {
+                if (!isDate(date, "YY/MM/DD")) return !1;
+            } else if (!isDate(date, "YYYY/MM/DD")) return !1;
+            for (var digits = tin.split("").map(function(a) {
+                return parseInt(a, 10);
+            }), multipliers = [ 2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9 ], checksum = 0, i = 0; i < multipliers.length; i++) checksum += digits[i] * multipliers[i];
+            return checksum % 11 === 10 ? 1 === digits[12] : digits[12] === checksum % 11;
+        }
+        return !0;
+    }
+    function skSkCheck(tin) {
+        if (9 === tin.length) {
+            if (tin = tin.replace(/\W/, ""), "000" === tin.slice(6)) return !1;
+            var full_year = parseInt(tin.slice(0, 2), 10);
+            if (full_year > 53) return !1;
+            full_year = 10 > full_year ? "190".concat(full_year) : "19".concat(full_year);
+            var month = parseInt(tin.slice(2, 4), 10);
+            month > 50 && (month -= 50), 10 > month && (month = "0".concat(month));
+            var date = "".concat(full_year, "/").concat(month, "/").concat(tin.slice(4, 6));
+            if (!isDate(date, "YYYY/MM/DD")) return !1;
+        }
+        return !0;
+    }
+    function slSiCheck(tin) {
+        var checksum = 11 - reverseMultiplyAndSum(tin.split("").slice(0, 7).map(function(a) {
+            return parseInt(a, 10);
+        }), 8) % 11;
+        return 10 === checksum ? 0 === parseInt(tin[7], 10) : checksum === parseInt(tin[7], 10);
+    }
+    function svSeCheck(tin) {
+        var tin_copy = tin.slice(0);
+        tin.length > 11 && (tin_copy = tin_copy.slice(2));
+        var full_year = "", month = tin_copy.slice(2, 4), day = parseInt(tin_copy.slice(4, 6), 10);
+        if (tin.length > 11) full_year = tin.slice(0, 4); else if (full_year = tin.slice(0, 2), 
+        11 === tin.length && 60 > day) {
+            var current_year = new Date().getFullYear().toString(), current_century = parseInt(current_year.slice(0, 2), 10);
+            if (current_year = parseInt(current_year, 10), "-" === tin[6]) full_year = parseInt("".concat(current_century).concat(full_year), 10) > current_year ? "".concat(current_century - 1).concat(full_year) : "".concat(current_century).concat(full_year); else if (full_year = "".concat(current_century - 1).concat(full_year), 
+            current_year - parseInt(full_year, 10) < 100) return !1;
+        }
+        day > 60 && (day -= 60), 10 > day && (day = "0".concat(day));
+        var date = "".concat(full_year, "/").concat(month, "/").concat(day);
+        if (8 === date.length) {
+            if (!isDate(date, "YY/MM/DD")) return !1;
+        } else if (!isDate(date, "YYYY/MM/DD")) return !1;
+        return luhnCheck(tin.replace(/\W/, ""));
+    }
+    function isTaxID(str) {
+        var locale = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : "en-US";
+        assertString(str);
+        var strcopy = str.slice(0);
+        if (locale in taxIdFormat) return locale in sanitizeRegexes && (strcopy = strcopy.replace(sanitizeRegexes[locale], "")), 
+        taxIdFormat[locale].test(strcopy) ? locale in taxIdCheck ? taxIdCheck[locale](strcopy) : !0 : !1;
+        throw new Error("Invalid locale '".concat(locale, "'"));
+    }
     function isMobilePhone(str, locale, options) {
         if (assertString(str), options && options.strictMode && !str.startsWith("+")) return !1;
+        if (Array.isArray(locale)) return locale.some(function(key) {
+            if (phones.hasOwnProperty(key)) {
+                var phone = phones[key];
+                if (phone.test(str)) return !0;
+            }
+            return !1;
+        });
         if (locale in phones) return phones[locale].test(str);
-        if ("any" === locale) {
+        if (!locale || "any" === locale) {
             for (var key in phones) if (phones.hasOwnProperty(key)) {
                 var phone = phones[key];
                 if (phone.test(str)) return !0;
             }
             return !1;
         }
-        throw new Error("Invalid locale '" + locale + "'");
+        throw new Error("Invalid locale '".concat(locale, "'"));
+    }
+    function isEthereumAddress(str) {
+        return assertString(str), eth.test(str);
     }
     function currencyRegex(options) {
-        var decimal_digits = "\\d{" + options.digits_after_decimal[0] + "}";
+        var decimal_digits = "\\d{".concat(options.digits_after_decimal[0], "}");
         options.digits_after_decimal.forEach(function(digit, index) {
-            0 !== index && (decimal_digits = decimal_digits + "|\\d{" + digit + "}");
+            0 !== index && (decimal_digits = "".concat(decimal_digits, "|\\d{").concat(digit, "}"));
         });
-        var symbol = "(\\" + options.symbol.replace(/\./g, "\\.") + ")" + (options.require_symbol ? "" : "?"), negative = "-?", whole_dollar_amount_without_sep = "[1-9]\\d*", whole_dollar_amount_with_sep = "[1-9]\\d{0,2}(\\" + options.thousands_separator + "\\d{3})*", valid_whole_dollar_amounts = [ "0", whole_dollar_amount_without_sep, whole_dollar_amount_with_sep ], whole_dollar_amount = "(" + valid_whole_dollar_amounts.join("|") + ")?", decimal_amount = "(\\" + options.decimal_separator + "(" + decimal_digits + "))" + (options.require_decimal ? "" : "?"), pattern = whole_dollar_amount + (options.allow_decimal || options.require_decimal ? decimal_amount : "");
+        var symbol = "(".concat(options.symbol.replace(/\W/, function(m) {
+            return "\\".concat(m);
+        }), ")").concat(options.require_symbol ? "" : "?"), negative = "-?", whole_dollar_amount_without_sep = "[1-9]\\d*", whole_dollar_amount_with_sep = "[1-9]\\d{0,2}(\\".concat(options.thousands_separator, "\\d{3})*"), valid_whole_dollar_amounts = [ "0", whole_dollar_amount_without_sep, whole_dollar_amount_with_sep ], whole_dollar_amount = "(".concat(valid_whole_dollar_amounts.join("|"), ")?"), decimal_amount = "(\\".concat(options.decimal_separator, "(").concat(decimal_digits, "))").concat(options.require_decimal ? "" : "?"), pattern = whole_dollar_amount + (options.allow_decimal || options.require_decimal ? decimal_amount : "");
         return options.allow_negatives && !options.parens_for_negatives && (options.negative_sign_after_digits ? pattern += negative : options.negative_sign_before_digits && (pattern = negative + pattern)), 
-        options.allow_negative_sign_placeholder ? pattern = "( (?!\\-))?" + pattern : options.allow_space_after_symbol ? pattern = " ?" + pattern : options.allow_space_after_digits && (pattern += "( (?!$))?"), 
-        options.symbol_after_digits ? pattern += symbol : pattern = symbol + pattern, options.allow_negatives && (options.parens_for_negatives ? pattern = "(\\(" + pattern + "\\)|" + pattern + ")" : options.negative_sign_before_digits || options.negative_sign_after_digits || (pattern = negative + pattern)), 
-        new RegExp("^(?!-? )(?=.*\\d)" + pattern + "$");
+        options.allow_negative_sign_placeholder ? pattern = "( (?!\\-))?".concat(pattern) : options.allow_space_after_symbol ? pattern = " ?".concat(pattern) : options.allow_space_after_digits && (pattern += "( (?!$))?"), 
+        options.symbol_after_digits ? pattern += symbol : pattern = symbol + pattern, options.allow_negatives && (options.parens_for_negatives ? pattern = "(\\(".concat(pattern, "\\)|").concat(pattern, ")") : options.negative_sign_before_digits || options.negative_sign_after_digits || (pattern = negative + pattern)), 
+        new RegExp("^(?!-? )(?=.*\\d)".concat(pattern, "$"));
     }
     function isCurrency(str, options) {
         return assertString(str), options = merge(options, default_currency_options), currencyRegex(options).test(str);
     }
+    function isBtcAddress(str) {
+        return assertString(str), btc.test(str);
+    }
     function isISO8601(str) {
-        return assertString(str), iso8601.test(str);
+        var options = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : {};
+        assertString(str);
+        var check = options.strictSeparator ? iso8601StrictSeparator.test(str) : iso8601.test(str);
+        return check && options.strict ? isValidDate(str) : check;
     }
     function isRFC3339(str) {
         return assertString(str), rfc3339.test(str);
     }
     function isISO31661Alpha2(str) {
-        return assertString(str), validISO31661Alpha2CountriesCodes.includes(str.toUpperCase());
+        return assertString(str), includes(validISO31661Alpha2CountriesCodes, str.toUpperCase());
     }
     function isISO31661Alpha3(str) {
-        return assertString(str), validISO31661Alpha3CountriesCodes.includes(str.toUpperCase());
+        return assertString(str), includes(validISO31661Alpha3CountriesCodes, str.toUpperCase());
     }
-    function isBase64(str) {
+    function isBase32(str) {
         assertString(str);
         var len = str.length;
-        if (!len || len % 4 !== 0 || notBase64.test(str)) return !1;
-        var firstPaddingChar = str.indexOf("=");
-        return -1 === firstPaddingChar || firstPaddingChar === len - 1 || firstPaddingChar === len - 2 && "=" === str[len - 1];
+        return len % 8 === 0 && base32.test(str) ? !0 : !1;
+    }
+    function isBase58(str) {
+        return assertString(str), base58Reg.test(str) ? !0 : !1;
     }
     function isDataURI(str) {
         assertString(str);
@@ -28314,18 +29780,37 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         for (var _i = 0; _i < data.length; _i++) if (!validData.test(data[_i])) return !1;
         return !0;
     }
+    function isMagnetURI(url) {
+        return assertString(url), magnetURI.test(url.trim());
+    }
     function isMimeType(str) {
         return assertString(str), mimeTypeSimple.test(str) || mimeTypeText.test(str) || mimeTypeMultipart.test(str);
     }
+    function isLatLong(str, options) {
+        if (assertString(str), options = merge(options, defaultLatLongOptions), !str.includes(",")) return !1;
+        var pair = str.split(",");
+        return pair[0].startsWith("(") && !pair[1].endsWith(")") || pair[1].endsWith(")") && !pair[0].startsWith("(") ? !1 : options.checkDMS ? latDMS.test(pair[0]) && longDMS.test(pair[1]) : lat.test(pair[0]) && _long.test(pair[1]);
+    }
+    function isPostalCode(str, locale) {
+        if (assertString(str), locale in patterns) return patterns[locale].test(str);
+        if ("any" === locale) {
+            for (var key in patterns) if (patterns.hasOwnProperty(key)) {
+                var pattern = patterns[key];
+                if (pattern.test(str)) return !0;
+            }
+            return !1;
+        }
+        throw new Error("Invalid locale '".concat(locale, "'"));
+    }
     function ltrim(str, chars) {
         assertString(str);
-        var pattern = chars ? new RegExp("^[" + chars + "]+", "g") : /^\s+/g;
+        var pattern = chars ? new RegExp("^[".concat(chars.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "]+"), "g") : /^\s+/g;
         return str.replace(pattern, "");
     }
     function rtrim(str, chars) {
         assertString(str);
-        for (var pattern = chars ? new RegExp("[" + chars + "]") : /\s/, idx = str.length - 1; idx >= 0 && pattern.test(str[idx]); ) idx--;
-        return idx < str.length ? str.substr(0, idx + 1) : str;
+        var pattern = chars ? new RegExp("[".concat(chars.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "]+$"), "g") : /\s+$/g;
+        return str.replace(pattern, "");
     }
     function trim(str, chars) {
         return rtrim(ltrim(str, chars), chars);
@@ -28337,7 +29822,7 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         return assertString(str), str.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#x2F;/g, "/").replace(/&#x5C;/g, "\\").replace(/&#96;/g, "`");
     }
     function blacklist$1(str, chars) {
-        return assertString(str), str.replace(new RegExp("[" + chars + "]+", "g"), "");
+        return assertString(str), str.replace(new RegExp("[".concat(chars, "]+"), "g"), "");
     }
     function stripLow(str, keep_new_lines) {
         assertString(str);
@@ -28345,7 +29830,7 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         return blacklist$1(str, chars);
     }
     function whitelist(str, chars) {
-        return assertString(str), str.replace(new RegExp("[^" + chars + "]+", "g"), "");
+        return assertString(str), str.replace(new RegExp("[^".concat(chars, "]+"), "g"), "");
     }
     function isWhitelisted(str, chars) {
         assertString(str);
@@ -28363,54 +29848,76 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
             !parts[0].length) return !1;
             (options.all_lowercase || options.gmail_lowercase) && (parts[0] = parts[0].toLowerCase()), 
             parts[1] = options.gmail_convert_googlemaildotcom ? "gmail.com" : parts[1];
-        } else if (~icloud_domains.indexOf(parts[1])) {
+        } else if (icloud_domains.indexOf(parts[1]) >= 0) {
             if (options.icloud_remove_subaddress && (parts[0] = parts[0].split("+")[0]), !parts[0].length) return !1;
             (options.all_lowercase || options.icloud_lowercase) && (parts[0] = parts[0].toLowerCase());
-        } else if (~outlookdotcom_domains.indexOf(parts[1])) {
+        } else if (outlookdotcom_domains.indexOf(parts[1]) >= 0) {
             if (options.outlookdotcom_remove_subaddress && (parts[0] = parts[0].split("+")[0]), 
             !parts[0].length) return !1;
             (options.all_lowercase || options.outlookdotcom_lowercase) && (parts[0] = parts[0].toLowerCase());
-        } else if (~yahoo_domains.indexOf(parts[1])) {
+        } else if (yahoo_domains.indexOf(parts[1]) >= 0) {
             if (options.yahoo_remove_subaddress) {
                 var components = parts[0].split("-");
                 parts[0] = components.length > 1 ? components.slice(0, -1).join("-") : components[0];
             }
             if (!parts[0].length) return !1;
             (options.all_lowercase || options.yahoo_lowercase) && (parts[0] = parts[0].toLowerCase());
-        } else ~yandex_domains.indexOf(parts[1]) ? ((options.all_lowercase || options.yandex_lowercase) && (parts[0] = parts[0].toLowerCase()), 
+        } else yandex_domains.indexOf(parts[1]) >= 0 ? ((options.all_lowercase || options.yandex_lowercase) && (parts[0] = parts[0].toLowerCase()), 
         parts[1] = "yandex.ru") : options.all_lowercase && (parts[0] = parts[0].toLowerCase());
         return parts.join("@");
     }
-    for (var locale, _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(obj) {
-        return typeof obj;
-    } : function(obj) {
-        return obj && "function" == typeof Symbol && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj;
-    }, default_fqdn_options = {
-        require_tld: !0,
-        allow_underscores: !1,
-        allow_trailing_dot: !1
-    }, default_email_options = {
-        allow_display_name: !1,
-        require_display_name: !1,
-        allow_utf8_local_part: !0,
-        require_tld: !0
-    }, displayName = /^[a-z\d!#\$%&'\*\+\-\/=\?\^_`{\|}~\.\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]+[a-z\d!#\$%&'\*\+\-\/=\?\^_`{\|}~\,\.\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF\s]*<(.+)>$/i, emailUserPart = /^[a-z\d!#\$%&'\*\+\-\/=\?\^_`{\|}~]+$/i, quotedEmailUser = /^([\s\x01-\x08\x0b\x0c\x0e-\x1f\x7f\x21\x23-\x5b\x5d-\x7e]|(\\[\x01-\x09\x0b\x0c\x0d-\x7f]))*$/i, emailUserUtf8Part = /^[a-z\d!#\$%&'\*\+\-\/=\?\^_`{\|}~\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]+$/i, quotedEmailUserUtf8 = /^([\s\x01-\x08\x0b\x0c\x0e-\x1f\x7f\x21\x23-\x5b\x5d-\x7e\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|(\\[\x01-\x09\x0b\x0c\x0d-\x7f\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]))*$/i, ipv4Maybe = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/, ipv6Block = /^[0-9A-F]{1,4}$/i, default_url_options = {
-        protocols: [ "http", "https", "ftp" ],
-        require_tld: !0,
-        require_protocol: !1,
-        require_host: !0,
-        require_valid_protocol: !0,
-        allow_underscores: !1,
-        allow_trailing_dot: !1,
-        allow_protocol_relative_urls: !1
-    }, wrapped_ipv6 = /^\[([^\]]+)\](?::([0-9]+))?$/, macAddress = /^([0-9a-fA-F][0-9a-fA-F]:){5}([0-9a-fA-F][0-9a-fA-F])$/, alpha = {
+    function isSlug(str) {
+        return assertString(str), charsetRegex.test(str);
+    }
+    function countChars(str) {
+        var result = {};
+        return Array.from(str).forEach(function(_char) {
+            var curVal = result[_char];
+            curVal ? result[_char] += 1 : result[_char] = 1;
+        }), result;
+    }
+    function analyzePassword(password) {
+        var charMap = countChars(password), analysis = {
+            length: password.length,
+            uniqueChars: Object.keys(charMap).length,
+            uppercaseCount: 0,
+            lowercaseCount: 0,
+            numberCount: 0,
+            symbolCount: 0
+        };
+        return Object.keys(charMap).forEach(function(_char2) {
+            upperCaseRegex.test(_char2) ? analysis.uppercaseCount += charMap[_char2] : lowerCaseRegex.test(_char2) ? analysis.lowercaseCount += charMap[_char2] : numberRegex.test(_char2) ? analysis.numberCount += charMap[_char2] : symbolRegex.test(_char2) && (analysis.symbolCount += charMap[_char2]);
+        }), analysis;
+    }
+    function scorePassword(analysis, scoringOptions) {
+        var points = 0;
+        return points += analysis.uniqueChars * scoringOptions.pointsPerUnique, points += (analysis.length - analysis.uniqueChars) * scoringOptions.pointsPerRepeat, 
+        analysis.lowercaseCount > 0 && (points += scoringOptions.pointsForContainingLower), 
+        analysis.uppercaseCount > 0 && (points += scoringOptions.pointsForContainingUpper), 
+        analysis.numberCount > 0 && (points += scoringOptions.pointsForContainingNumber), 
+        analysis.symbolCount > 0 && (points += scoringOptions.pointsForContainingSymbol), 
+        points;
+    }
+    function isStrongPassword(str) {
+        var options = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : null;
+        assertString(str);
+        var analysis = analyzePassword(str);
+        return options = merge(options || {}, defaultOptions), options.returnScore ? scorePassword(analysis, options) : analysis.length >= options.minLength && analysis.lowercaseCount >= options.minLowercase && analysis.uppercaseCount >= options.minUppercase && analysis.numberCount >= options.minNumbers && analysis.symbolCount >= options.minSymbols;
+    }
+    function isVAT(str, countryCode) {
+        if (assertString(str), assertString(countryCode), countryCode in vatMatchers) return vatMatchers[countryCode].test(str);
+        throw new Error("Invalid country code: '".concat(countryCode, "'"));
+    }
+    for (var locale, alpha = {
         "en-US": /^[A-Z]+$/i,
+        "az-AZ": /^[A-VXYZÇƏĞİıÖŞÜ]+$/i,
         "bg-BG": /^[А-Я]+$/i,
         "cs-CZ": /^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]+$/i,
         "da-DK": /^[A-ZÆØÅ]+$/i,
         "de-DE": /^[A-ZÄÖÜß]+$/i,
-        "el-GR": /^[Α-ω]+$/i,
+        "el-GR": /^[Α-ώ]+$/i,
         "es-ES": /^[A-ZÁÉÍÑÓÚÜ]+$/i,
+        "fa-IR": /^[ابپتثجچحخدذرزژسشصضطظعغفقکگلمنوهی]+$/i,
         "fr-FR": /^[A-ZÀÂÆÇÉÈÊËÏÎÔŒÙÛÜŸ]+$/i,
         "it-IT": /^[A-ZÀÉÈÌÎÓÒÙ]+$/i,
         "nb-NO": /^[A-ZÆØÅ]+$/i,
@@ -28418,17 +29925,24 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         "nn-NO": /^[A-ZÆØÅ]+$/i,
         "hu-HU": /^[A-ZÁÉÍÓÖŐÚÜŰ]+$/i,
         "pl-PL": /^[A-ZĄĆĘŚŁŃÓŻŹ]+$/i,
-        "pt-PT": /^[A-ZÃÁÀÂÇÉÊÍÕÓÔÚÜ]+$/i,
+        "pt-PT": /^[A-ZÃÁÀÂÄÇÉÊËÍÏÕÓÔÖÚÜ]+$/i,
         "ru-RU": /^[А-ЯЁ]+$/i,
+        "sl-SI": /^[A-ZČĆĐŠŽ]+$/i,
         "sk-SK": /^[A-ZÁČĎÉÍŇÓŠŤÚÝŽĹŔĽÄÔ]+$/i,
         "sr-RS@latin": /^[A-ZČĆŽŠĐ]+$/i,
         "sr-RS": /^[А-ЯЂЈЉЊЋЏ]+$/i,
         "sv-SE": /^[A-ZÅÄÖ]+$/i,
+        "th-TH": /^[ก-๐\s]+$/i,
         "tr-TR": /^[A-ZÇĞİıÖŞÜ]+$/i,
         "uk-UA": /^[А-ЩЬЮЯЄIЇҐі]+$/i,
-        ar: /^[ءآأؤإئابةتثجحخدذرزسشصضطظعغفقكلمنهوىيًٌٍَُِّْٰ]+$/
+        "vi-VN": /^[A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴĐÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸ]+$/i,
+        "ku-IQ": /^[ئابپتجچحخدرڕزژسشعغفڤقکگلڵمنوۆھەیێيطؤثآإأكضصةظذ]+$/i,
+        ar: /^[ءآأؤإئابةتثجحخدذرزسشصضطظعغفقكلمنهوىيًٌٍَُِّْٰ]+$/,
+        he: /^[א-ת]+$/,
+        fa: /^['آاءأؤئبپتثجچحخدذرزژسشصضطظعغفقکگلمنوهةی']+$/i
     }, alphanumeric = {
         "en-US": /^[0-9A-Z]+$/i,
+        "az-AZ": /^[0-9A-VXYZÇƏĞİıÖŞÜ]+$/i,
         "bg-BG": /^[0-9А-Я]+$/i,
         "cs-CZ": /^[0-9A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]+$/i,
         "da-DK": /^[0-9A-ZÆØÅ]+$/i,
@@ -28442,31 +29956,197 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         "nl-NL": /^[0-9A-ZÁÉËÏÓÖÜÚ]+$/i,
         "nn-NO": /^[0-9A-ZÆØÅ]+$/i,
         "pl-PL": /^[0-9A-ZĄĆĘŚŁŃÓŻŹ]+$/i,
-        "pt-PT": /^[0-9A-ZÃÁÀÂÇÉÊÍÕÓÔÚÜ]+$/i,
+        "pt-PT": /^[0-9A-ZÃÁÀÂÄÇÉÊËÍÏÕÓÔÖÚÜ]+$/i,
         "ru-RU": /^[0-9А-ЯЁ]+$/i,
+        "sl-SI": /^[0-9A-ZČĆĐŠŽ]+$/i,
         "sk-SK": /^[0-9A-ZÁČĎÉÍŇÓŠŤÚÝŽĹŔĽÄÔ]+$/i,
         "sr-RS@latin": /^[0-9A-ZČĆŽŠĐ]+$/i,
         "sr-RS": /^[0-9А-ЯЂЈЉЊЋЏ]+$/i,
         "sv-SE": /^[0-9A-ZÅÄÖ]+$/i,
+        "th-TH": /^[ก-๙\s]+$/i,
         "tr-TR": /^[0-9A-ZÇĞİıÖŞÜ]+$/i,
         "uk-UA": /^[0-9А-ЩЬЮЯЄIЇҐі]+$/i,
-        ar: /^[٠١٢٣٤٥٦٧٨٩0-9ءآأؤإئابةتثجحخدذرزسشصضطظعغفقكلمنهوىيًٌٍَُِّْٰ]+$/
+        "ku-IQ": /^[٠١٢٣٤٥٦٧٨٩0-9ئابپتجچحخدرڕزژسشعغفڤقکگلڵمنوۆھەیێيطؤثآإأكضصةظذ]+$/i,
+        "vi-VN": /^[0-9A-ZÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴĐÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸ]+$/i,
+        ar: /^[٠١٢٣٤٥٦٧٨٩0-9ءآأؤإئابةتثجحخدذرزسشصضطظعغفقكلمنهوىيًٌٍَُِّْٰ]+$/,
+        he: /^[0-9א-ת]+$/,
+        fa: /^['0-9آاءأؤئبپتثجچحخدذرزژسشصضطظعغفقکگلمنوهةی۱۲۳۴۵۶۷۸۹۰']+$/i
     }, decimal = {
         "en-US": ".",
         ar: "٫"
-    }, englishLocales = [ "AU", "GB", "HK", "IN", "NZ", "ZA", "ZM" ], i = 0; i < englishLocales.length; i++) locale = "en-" + englishLocales[i], 
+    }, englishLocales = [ "AU", "GB", "HK", "IN", "NZ", "ZA", "ZM" ], i = 0; i < englishLocales.length; i++) locale = "en-".concat(englishLocales[i]), 
     alpha[locale] = alpha["en-US"], alphanumeric[locale] = alphanumeric["en-US"], decimal[locale] = decimal["en-US"];
-    for (var _locale, arabicLocales = [ "AE", "BH", "DZ", "EG", "IQ", "JO", "KW", "LB", "LY", "MA", "QM", "QA", "SA", "SD", "SY", "TN", "YE" ], _i = 0; _i < arabicLocales.length; _i++) _locale = "ar-" + arabicLocales[_i], 
+    for (var _locale, arabicLocales = [ "AE", "BH", "DZ", "EG", "IQ", "JO", "KW", "LB", "LY", "MA", "QM", "QA", "SA", "SD", "SY", "TN", "YE" ], _i = 0; _i < arabicLocales.length; _i++) _locale = "ar-".concat(arabicLocales[_i]), 
     alpha[_locale] = alpha.ar, alphanumeric[_locale] = alphanumeric.ar, decimal[_locale] = decimal.ar;
-    for (var dotDecimal = [], commaDecimal = [ "bg-BG", "cs-CZ", "da-DK", "de-DE", "el-GR", "es-ES", "fr-FR", "it-IT", "hu-HU", "nb-NO", "nn-NO", "nl-NL", "pl-Pl", "pt-PT", "ru-RU", "sr-RS@latin", "sr-RS", "sv-SE", "tr-TR", "uk-UA" ], _i2 = 0; _i2 < dotDecimal.length; _i2++) decimal[dotDecimal[_i2]] = decimal["en-US"];
-    for (var _i3 = 0; _i3 < commaDecimal.length; _i3++) decimal[commaDecimal[_i3]] = ",";
+    for (var _locale2, farsiLocales = [ "IR", "AF" ], _i2 = 0; _i2 < farsiLocales.length; _i2++) _locale2 = "fa-".concat(farsiLocales[_i2]), 
+    alphanumeric[_locale2] = alphanumeric.fa, decimal[_locale2] = decimal.ar;
+    for (var dotDecimal = [ "ar-EG", "ar-LB", "ar-LY" ], commaDecimal = [ "bg-BG", "cs-CZ", "da-DK", "de-DE", "el-GR", "en-ZM", "es-ES", "fr-CA", "fr-FR", "id-ID", "it-IT", "ku-IQ", "hu-HU", "nb-NO", "nn-NO", "nl-NL", "pl-PL", "pt-PT", "ru-RU", "sl-SI", "sr-RS@latin", "sr-RS", "sv-SE", "tr-TR", "uk-UA", "vi-VN" ], _i3 = 0; _i3 < dotDecimal.length; _i3++) decimal[dotDecimal[_i3]] = decimal["en-US"];
+    for (var _i4 = 0; _i4 < commaDecimal.length; _i4++) decimal[commaDecimal[_i4]] = ",";
+    alpha["fr-CA"] = alpha["fr-FR"], alphanumeric["fr-CA"] = alphanumeric["fr-FR"], 
     alpha["pt-BR"] = alpha["pt-PT"], alphanumeric["pt-BR"] = alphanumeric["pt-PT"], 
-    decimal["pt-BR"] = decimal["pt-PT"];
-    var numeric = /^[+-]?([0-9]*[.])?[0-9]+$/, int = /^(?:[-+]?(?:0|[1-9][0-9]*))$/, intLeadingZeroes = /^[-+]?[0-9]+$/, ascii = /^[\x00-\x7F]+$/, fullWidth = /[^\u0020-\u007E\uFF61-\uFF9F\uFFA0-\uFFDC\uFFE8-\uFFEE0-9a-zA-Z]/, halfWidth = /[\u0020-\u007E\uFF61-\uFF9F\uFFA0-\uFFDC\uFFE8-\uFFEE0-9a-zA-Z]/, multibyte = /[^\x00-\x7F]/, surrogatePair = /[\uD800-\uDBFF][\uDC00-\uDFFF]/, default_decimal_options = {
+    decimal["pt-BR"] = decimal["pt-PT"], alpha["pl-Pl"] = alpha["pl-PL"], alphanumeric["pl-Pl"] = alphanumeric["pl-PL"], 
+    decimal["pl-Pl"] = decimal["pl-PL"], alpha["fa-AF"] = alpha.fa;
+    var locales = Object.keys(decimal), defaulContainsOptions = {
+        ignoreCase: !1
+    }, default_fqdn_options = {
+        require_tld: !0,
+        allow_underscores: !1,
+        allow_trailing_dot: !1,
+        allow_numeric_tld: !1
+    }, ipv4Maybe = /^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/, ipv6Block = /^[0-9A-F]{1,4}$/i, default_email_options = {
+        allow_display_name: !1,
+        require_display_name: !1,
+        allow_utf8_local_part: !0,
+        require_tld: !0,
+        blacklisted_chars: "",
+        ignore_max_length: !1
+    }, splitNameAddress = /^([^\x00-\x1F\x7F-\x9F\cX]+)<(.+)>$/i, emailUserPart = /^[a-z\d!#\$%&'\*\+\-\/=\?\^_`{\|}~]+$/i, gmailUserPart = /^[a-z\d]+$/, quotedEmailUser = /^([\s\x01-\x08\x0b\x0c\x0e-\x1f\x7f\x21\x23-\x5b\x5d-\x7e]|(\\[\x01-\x09\x0b\x0c\x0d-\x7f]))*$/i, emailUserUtf8Part = /^[a-z\d!#\$%&'\*\+\-\/=\?\^_`{\|}~\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]+$/i, quotedEmailUserUtf8 = /^([\s\x01-\x08\x0b\x0c\x0e-\x1f\x7f\x21\x23-\x5b\x5d-\x7e\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|(\\[\x01-\x09\x0b\x0c\x0d-\x7f\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]))*$/i, defaultMaxEmailLength = 254, default_url_options = {
+        protocols: [ "http", "https", "ftp" ],
+        require_tld: !0,
+        require_protocol: !1,
+        require_host: !0,
+        require_port: !1,
+        require_valid_protocol: !0,
+        allow_underscores: !1,
+        allow_trailing_dot: !1,
+        allow_protocol_relative_urls: !1,
+        validate_length: !0
+    }, wrapped_ipv6 = /^\[([^\]]+)\](?::([0-9]+))?$/, macAddress = /^([0-9a-fA-F][0-9a-fA-F]:){5}([0-9a-fA-F][0-9a-fA-F])$/, macAddressNoColons = /^([0-9a-fA-F]){12}$/, macAddressWithHyphen = /^([0-9a-fA-F][0-9a-fA-F]-){5}([0-9a-fA-F][0-9a-fA-F])$/, macAddressWithSpaces = /^([0-9a-fA-F][0-9a-fA-F]\s){5}([0-9a-fA-F][0-9a-fA-F])$/, macAddressWithDots = /^([0-9a-fA-F]{4}).([0-9a-fA-F]{4}).([0-9a-fA-F]{4})$/, subnetMaybe = /^\d{1,2}$/, default_date_options = {
+        format: "YYYY/MM/DD",
+        delimiters: [ "/", "-" ],
+        strictMode: !1
+    }, localeReg = /^[A-z]{2,4}([_-]([A-z]{4}|[\d]{3}))?([_-]([A-z]{2}|[\d]{3}))?$/, locales$1 = Object.keys(alpha), locales$2 = Object.keys(alphanumeric), numericNoSymbols = /^[0-9]+$/, passportRegexByCountryCode = {
+        AM: /^[A-Z]{2}\d{7}$/,
+        AR: /^[A-Z]{3}\d{6}$/,
+        AT: /^[A-Z]\d{7}$/,
+        AU: /^[A-Z]\d{7}$/,
+        BE: /^[A-Z]{2}\d{6}$/,
+        BG: /^\d{9}$/,
+        BY: /^[A-Z]{2}\d{7}$/,
+        CA: /^[A-Z]{2}\d{6}$/,
+        CH: /^[A-Z]\d{7}$/,
+        CN: /^[GE]\d{8}$/,
+        CY: /^[A-Z](\d{6}|\d{8})$/,
+        CZ: /^\d{8}$/,
+        DE: /^[CFGHJKLMNPRTVWXYZ0-9]{9}$/,
+        DK: /^\d{9}$/,
+        DZ: /^\d{9}$/,
+        EE: /^([A-Z]\d{7}|[A-Z]{2}\d{7})$/,
+        ES: /^[A-Z0-9]{2}([A-Z0-9]?)\d{6}$/,
+        FI: /^[A-Z]{2}\d{7}$/,
+        FR: /^\d{2}[A-Z]{2}\d{5}$/,
+        GB: /^\d{9}$/,
+        GR: /^[A-Z]{2}\d{7}$/,
+        HR: /^\d{9}$/,
+        HU: /^[A-Z]{2}(\d{6}|\d{7})$/,
+        IE: /^[A-Z0-9]{2}\d{7}$/,
+        IN: /^[A-Z]{1}-?\d{7}$/,
+        IS: /^(A)\d{7}$/,
+        IT: /^[A-Z0-9]{2}\d{7}$/,
+        JP: /^[A-Z]{2}\d{7}$/,
+        KR: /^[MS]\d{8}$/,
+        LT: /^[A-Z0-9]{8}$/,
+        LU: /^[A-Z0-9]{8}$/,
+        LV: /^[A-Z0-9]{2}\d{7}$/,
+        MT: /^\d{7}$/,
+        NL: /^[A-Z]{2}[A-Z0-9]{6}\d$/,
+        PO: /^[A-Z]{2}\d{7}$/,
+        PT: /^[A-Z]\d{6}$/,
+        RO: /^\d{8,9}$/,
+        RU: /^\d{2}\d{2}\d{6}$/,
+        SE: /^\d{8}$/,
+        SL: /^(P)[A-Z]\d{7}$/,
+        SK: /^[0-9A-Z]\d{7}$/,
+        TR: /^[A-Z]\d{8}$/,
+        UA: /^[A-Z]{2}\d{6}$/,
+        US: /^\d{9}$/
+    }, _int = /^(?:[-+]?(?:0|[1-9][0-9]*))$/, intLeadingZeroes = /^[-+]?[0-9]+$/, imeiRegexWithoutHypens = /^[0-9]{15}$/, imeiRegexWithHypens = /^\d{2}-\d{6}-\d{6}-\d{1}$/, ascii = /^[\x00-\x7F]+$/, fullWidth = /[^\u0020-\u007E\uFF61-\uFF9F\uFFA0-\uFFDC\uFFE8-\uFFEE0-9a-zA-Z]/, halfWidth = /[\u0020-\u007E\uFF61-\uFF9F\uFFA0-\uFFDC\uFFE8-\uFFEE0-9a-zA-Z]/, multibyte = /[^\x00-\x7F]/, semanticVersioningRegex = multilineRegexp([ "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)", "(?:-((?:0|[1-9]\\d*|\\d*[a-z-][0-9a-z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-z-][0-9a-z-]*))*))", "?(?:\\+([0-9a-z-]+(?:\\.[0-9a-z-]+)*))?$" ], "i"), surrogatePair = /[\uD800-\uDBFF][\uDC00-\uDFFF]/, includes = function(arr, val) {
+        return arr.some(function(arrVal) {
+            return val === arrVal;
+        });
+    }, default_decimal_options = {
         force_decimal: !1,
         decimal_digits: "1,",
         locale: "en-US"
-    }, blacklist = [ "", "-", "+" ], hexadecimal = /^[0-9A-F]+$/i, hexcolor = /^#?([0-9A-F]{3}|[0-9A-F]{6})$/i, isrc = /^[A-Z]{2}[0-9A-Z]{3}\d{2}\d{5}$/, md5 = /^[a-f0-9]{32}$/, lengths = {
+    }, blacklist = [ "", "-", "+" ], hexadecimal = /^(0x|0h)?[0-9A-F]+$/i, octal = /^(0o)?[0-7]+$/i, hexcolor = /^#?([0-9A-F]{3}|[0-9A-F]{4}|[0-9A-F]{6}|[0-9A-F]{8})$/i, rgbColor = /^rgb\((([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]),){2}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\)$/, rgbaColor = /^rgba\((([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]),){3}(0?\.\d|1(\.0)?|0(\.0)?)\)$/, rgbColorPercent = /^rgb\((([0-9]%|[1-9][0-9]%|100%),){2}([0-9]%|[1-9][0-9]%|100%)\)/, rgbaColorPercent = /^rgba\((([0-9]%|[1-9][0-9]%|100%),){3}(0?\.\d|1(\.0)?|0(\.0)?)\)/, hslcomma = /^(hsl)a?\(\s*((\+|\-)?([0-9]+(\.[0-9]+)?(e(\+|\-)?[0-9]+)?|\.[0-9]+(e(\+|\-)?[0-9]+)?))(deg|grad|rad|turn|\s*)(\s*,\s*(\+|\-)?([0-9]+(\.[0-9]+)?(e(\+|\-)?[0-9]+)?|\.[0-9]+(e(\+|\-)?[0-9]+)?)%){2}\s*(,\s*((\+|\-)?([0-9]+(\.[0-9]+)?(e(\+|\-)?[0-9]+)?|\.[0-9]+(e(\+|\-)?[0-9]+)?)%?)\s*)?\)$/i, hslspace = /^(hsl)a?\(\s*((\+|\-)?([0-9]+(\.[0-9]+)?(e(\+|\-)?[0-9]+)?|\.[0-9]+(e(\+|\-)?[0-9]+)?))(deg|grad|rad|turn|\s)(\s*(\+|\-)?([0-9]+(\.[0-9]+)?(e(\+|\-)?[0-9]+)?|\.[0-9]+(e(\+|\-)?[0-9]+)?)%){2}\s*(\/\s*((\+|\-)?([0-9]+(\.[0-9]+)?(e(\+|\-)?[0-9]+)?|\.[0-9]+(e(\+|\-)?[0-9]+)?)%?)\s*)?\)$/i, isrc = /^[A-Z]{2}[0-9A-Z]{3}\d{2}\d{5}$/, ibanRegexThroughCountryCode = {
+        AD: /^(AD[0-9]{2})\d{8}[A-Z0-9]{12}$/,
+        AE: /^(AE[0-9]{2})\d{3}\d{16}$/,
+        AL: /^(AL[0-9]{2})\d{8}[A-Z0-9]{16}$/,
+        AT: /^(AT[0-9]{2})\d{16}$/,
+        AZ: /^(AZ[0-9]{2})[A-Z0-9]{4}\d{20}$/,
+        BA: /^(BA[0-9]{2})\d{16}$/,
+        BE: /^(BE[0-9]{2})\d{12}$/,
+        BG: /^(BG[0-9]{2})[A-Z]{4}\d{6}[A-Z0-9]{8}$/,
+        BH: /^(BH[0-9]{2})[A-Z]{4}[A-Z0-9]{14}$/,
+        BR: /^(BR[0-9]{2})\d{23}[A-Z]{1}[A-Z0-9]{1}$/,
+        BY: /^(BY[0-9]{2})[A-Z0-9]{4}\d{20}$/,
+        CH: /^(CH[0-9]{2})\d{5}[A-Z0-9]{12}$/,
+        CR: /^(CR[0-9]{2})\d{18}$/,
+        CY: /^(CY[0-9]{2})\d{8}[A-Z0-9]{16}$/,
+        CZ: /^(CZ[0-9]{2})\d{20}$/,
+        DE: /^(DE[0-9]{2})\d{18}$/,
+        DK: /^(DK[0-9]{2})\d{14}$/,
+        DO: /^(DO[0-9]{2})[A-Z]{4}\d{20}$/,
+        EE: /^(EE[0-9]{2})\d{16}$/,
+        EG: /^(EG[0-9]{2})\d{25}$/,
+        ES: /^(ES[0-9]{2})\d{20}$/,
+        FI: /^(FI[0-9]{2})\d{14}$/,
+        FO: /^(FO[0-9]{2})\d{14}$/,
+        FR: /^(FR[0-9]{2})\d{10}[A-Z0-9]{11}\d{2}$/,
+        GB: /^(GB[0-9]{2})[A-Z]{4}\d{14}$/,
+        GE: /^(GE[0-9]{2})[A-Z0-9]{2}\d{16}$/,
+        GI: /^(GI[0-9]{2})[A-Z]{4}[A-Z0-9]{15}$/,
+        GL: /^(GL[0-9]{2})\d{14}$/,
+        GR: /^(GR[0-9]{2})\d{7}[A-Z0-9]{16}$/,
+        GT: /^(GT[0-9]{2})[A-Z0-9]{4}[A-Z0-9]{20}$/,
+        HR: /^(HR[0-9]{2})\d{17}$/,
+        HU: /^(HU[0-9]{2})\d{24}$/,
+        IE: /^(IE[0-9]{2})[A-Z0-9]{4}\d{14}$/,
+        IL: /^(IL[0-9]{2})\d{19}$/,
+        IQ: /^(IQ[0-9]{2})[A-Z]{4}\d{15}$/,
+        IR: /^(IR[0-9]{2})0\d{2}0\d{18}$/,
+        IS: /^(IS[0-9]{2})\d{22}$/,
+        IT: /^(IT[0-9]{2})[A-Z]{1}\d{10}[A-Z0-9]{12}$/,
+        JO: /^(JO[0-9]{2})[A-Z]{4}\d{22}$/,
+        KW: /^(KW[0-9]{2})[A-Z]{4}[A-Z0-9]{22}$/,
+        KZ: /^(KZ[0-9]{2})\d{3}[A-Z0-9]{13}$/,
+        LB: /^(LB[0-9]{2})\d{4}[A-Z0-9]{20}$/,
+        LC: /^(LC[0-9]{2})[A-Z]{4}[A-Z0-9]{24}$/,
+        LI: /^(LI[0-9]{2})\d{5}[A-Z0-9]{12}$/,
+        LT: /^(LT[0-9]{2})\d{16}$/,
+        LU: /^(LU[0-9]{2})\d{3}[A-Z0-9]{13}$/,
+        LV: /^(LV[0-9]{2})[A-Z]{4}[A-Z0-9]{13}$/,
+        MC: /^(MC[0-9]{2})\d{10}[A-Z0-9]{11}\d{2}$/,
+        MD: /^(MD[0-9]{2})[A-Z0-9]{20}$/,
+        ME: /^(ME[0-9]{2})\d{18}$/,
+        MK: /^(MK[0-9]{2})\d{3}[A-Z0-9]{10}\d{2}$/,
+        MR: /^(MR[0-9]{2})\d{23}$/,
+        MT: /^(MT[0-9]{2})[A-Z]{4}\d{5}[A-Z0-9]{18}$/,
+        MU: /^(MU[0-9]{2})[A-Z]{4}\d{19}[A-Z]{3}$/,
+        NL: /^(NL[0-9]{2})[A-Z]{4}\d{10}$/,
+        NO: /^(NO[0-9]{2})\d{11}$/,
+        PK: /^(PK[0-9]{2})[A-Z0-9]{4}\d{16}$/,
+        PL: /^(PL[0-9]{2})\d{24}$/,
+        PS: /^(PS[0-9]{2})[A-Z0-9]{4}\d{21}$/,
+        PT: /^(PT[0-9]{2})\d{21}$/,
+        QA: /^(QA[0-9]{2})[A-Z]{4}[A-Z0-9]{21}$/,
+        RO: /^(RO[0-9]{2})[A-Z]{4}[A-Z0-9]{16}$/,
+        RS: /^(RS[0-9]{2})\d{18}$/,
+        SA: /^(SA[0-9]{2})\d{2}[A-Z0-9]{18}$/,
+        SC: /^(SC[0-9]{2})[A-Z]{4}\d{20}[A-Z]{3}$/,
+        SE: /^(SE[0-9]{2})\d{20}$/,
+        SI: /^(SI[0-9]{2})\d{15}$/,
+        SK: /^(SK[0-9]{2})\d{20}$/,
+        SM: /^(SM[0-9]{2})[A-Z]{1}\d{10}[A-Z0-9]{12}$/,
+        SV: /^(SV[0-9]{2})[A-Z0-9]{4}\d{20}$/,
+        TL: /^(TL[0-9]{2})\d{19}$/,
+        TN: /^(TN[0-9]{2})\d{20}$/,
+        TR: /^(TR[0-9]{2})\d{5}[A-Z0-9]{17}$/,
+        UA: /^(UA[0-9]{2})\d{6}[A-Z0-9]{19}$/,
+        VA: /^(VA[0-9]{2})\d{18}$/,
+        VG: /^(VG[0-9]{2})[A-Z0-9]{4}\d{16}$/,
+        XK: /^(XK[0-9]{2})\d{16}$/
+    }, isBICReg = /^[A-z]{4}[A-z]{2}\w{2}(\w{3})?$/, md5 = /^[a-f0-9]{32}$/, lengths = {
         md5: 32,
         md4: 32,
         sha1: 40,
@@ -28480,74 +30160,326 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         tiger192: 48,
         crc32: 8,
         crc32b: 8
+    }, notBase64 = /[^A-Z0-9+\/=]/i, urlSafeBase64 = /^[A-Z0-9_\-]*$/i, defaultBase64Options = {
+        urlSafe: !1
+    }, default_json_options = {
+        allow_primitives: !1
+    }, default_is_empty_options = {
+        ignore_whitespace: !1
     }, uuid = {
         3: /^[0-9A-F]{8}-[0-9A-F]{4}-3[0-9A-F]{3}-[0-9A-F]{4}-[0-9A-F]{12}$/i,
         4: /^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i,
         5: /^[0-9A-F]{8}-[0-9A-F]{4}-5[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i,
         all: /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i
-    }, creditCard = /^(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|(222[1-9]|22[3-9][0-9]|2[3-6][0-9]{2}|27[01][0-9]|2720)[0-9]{12}|6(?:011|5[0-9][0-9])[0-9]{12}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11}|(?:2131|1800|35\d{3})\d{11}|6[27][0-9]{14})$/, isin = /^[A-Z]{2}[0-9A-Z]{9}[0-9]$/, isbn10Maybe = /^(?:[0-9]{9}X|[0-9]{10})$/, isbn13Maybe = /^(?:[0-9]{13})$/, factor = [ 1, 3 ], issn = "^\\d{4}-?\\d{3}[\\dX]$", phones = {
+    }, creditCard = /^(?:4[0-9]{12}(?:[0-9]{3,6})?|5[1-5][0-9]{14}|(222[1-9]|22[3-9][0-9]|2[3-6][0-9]{2}|27[01][0-9]|2720)[0-9]{12}|6(?:011|5[0-9][0-9])[0-9]{12,15}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11}|(?:2131|1800|35\d{3})\d{11}|6[27][0-9]{14})$/, validators = {
+        ES: function(str) {
+            assertString(str);
+            var DNI = /^[0-9X-Z][0-9]{7}[TRWAGMYFPDXBNJZSQVHLCKE]$/, charsValue = {
+                X: 0,
+                Y: 1,
+                Z: 2
+            }, controlDigits = [ "T", "R", "W", "A", "G", "M", "Y", "F", "P", "D", "X", "B", "N", "J", "Z", "S", "Q", "V", "H", "L", "C", "K", "E" ], sanitized = str.trim().toUpperCase();
+            if (!DNI.test(sanitized)) return !1;
+            var number = sanitized.slice(0, -1).replace(/[X,Y,Z]/g, function(_char) {
+                return charsValue[_char];
+            });
+            return sanitized.endsWith(controlDigits[number % 23]);
+        },
+        IN: function(str) {
+            var DNI = /^[1-9]\d{3}\s?\d{4}\s?\d{4}$/, d = [ [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ], [ 1, 2, 3, 4, 0, 6, 7, 8, 9, 5 ], [ 2, 3, 4, 0, 1, 7, 8, 9, 5, 6 ], [ 3, 4, 0, 1, 2, 8, 9, 5, 6, 7 ], [ 4, 0, 1, 2, 3, 9, 5, 6, 7, 8 ], [ 5, 9, 8, 7, 6, 0, 4, 3, 2, 1 ], [ 6, 5, 9, 8, 7, 1, 0, 4, 3, 2 ], [ 7, 6, 5, 9, 8, 2, 1, 0, 4, 3 ], [ 8, 7, 6, 5, 9, 3, 2, 1, 0, 4 ], [ 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 ] ], p = [ [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ], [ 1, 5, 7, 6, 2, 8, 3, 0, 9, 4 ], [ 5, 8, 0, 3, 7, 9, 6, 1, 4, 2 ], [ 8, 9, 1, 6, 0, 4, 3, 5, 2, 7 ], [ 9, 4, 5, 3, 1, 2, 6, 8, 7, 0 ], [ 4, 2, 8, 6, 5, 7, 3, 9, 0, 1 ], [ 2, 7, 9, 3, 8, 0, 6, 4, 1, 5 ], [ 7, 0, 4, 6, 9, 1, 3, 2, 5, 8 ] ], sanitized = str.trim();
+            if (!DNI.test(sanitized)) return !1;
+            var c = 0, invertedArray = sanitized.replace(/\s/g, "").split("").map(Number).reverse();
+            return invertedArray.forEach(function(val, i) {
+                c = d[c][p[i % 8][val]];
+            }), 0 === c;
+        },
+        IT: function(str) {
+            return 9 !== str.length ? !1 : "CA00000AA" === str ? !1 : str.search(/C[A-Z][0-9]{5}[A-Z]{2}/i) > -1;
+        },
+        NO: function(str) {
+            var sanitized = str.trim();
+            if (isNaN(Number(sanitized))) return !1;
+            if (11 !== sanitized.length) return !1;
+            if ("00000000000" === sanitized) return !1;
+            var f = sanitized.split("").map(Number), k1 = (11 - (3 * f[0] + 7 * f[1] + 6 * f[2] + 1 * f[3] + 8 * f[4] + 9 * f[5] + 4 * f[6] + 5 * f[7] + 2 * f[8]) % 11) % 11, k2 = (11 - (5 * f[0] + 4 * f[1] + 3 * f[2] + 2 * f[3] + 7 * f[4] + 6 * f[5] + 5 * f[6] + 4 * f[7] + 3 * f[8] + 2 * k1) % 11) % 11;
+            return k1 !== f[9] || k2 !== f[10] ? !1 : !0;
+        },
+        "he-IL": function(str) {
+            var DNI = /^\d{9}$/, sanitized = str.trim();
+            if (!DNI.test(sanitized)) return !1;
+            for (var incNum, id = sanitized, sum = 0, i = 0; i < id.length; i++) incNum = Number(id[i]) * (i % 2 + 1), 
+            sum += incNum > 9 ? incNum - 9 : incNum;
+            return sum % 10 === 0;
+        },
+        "ar-TN": function(str) {
+            var DNI = /^\d{8}$/, sanitized = str.trim();
+            return DNI.test(sanitized) ? !0 : !1;
+        },
+        "zh-CN": function(str) {
+            var provincesAndCities = [ "11", "12", "13", "14", "15", "21", "22", "23", "31", "32", "33", "34", "35", "36", "37", "41", "42", "43", "44", "45", "46", "50", "51", "52", "53", "54", "61", "62", "63", "64", "65", "71", "81", "82", "91" ], powers = [ "7", "9", "10", "5", "8", "4", "2", "1", "6", "3", "7", "9", "10", "5", "8", "4", "2" ], parityBit = [ "1", "0", "X", "9", "8", "7", "6", "5", "4", "3", "2" ], checkAddressCode = function(addressCode) {
+                return provincesAndCities.includes(addressCode);
+            }, checkBirthDayCode = function(birDayCode) {
+                var yyyy = parseInt(birDayCode.substring(0, 4), 10), mm = parseInt(birDayCode.substring(4, 6), 10), dd = parseInt(birDayCode.substring(6), 10), xdata = new Date(yyyy, mm - 1, dd);
+                return xdata > new Date() ? !1 : xdata.getFullYear() === yyyy && xdata.getMonth() === mm - 1 && xdata.getDate() === dd ? !0 : !1;
+            }, getParityBit = function(idCardNo) {
+                for (var id17 = idCardNo.substring(0, 17), power = 0, i = 0; 17 > i; i++) power += parseInt(id17.charAt(i), 10) * parseInt(powers[i], 10);
+                var mod = power % 11;
+                return parityBit[mod];
+            }, checkParityBit = function(idCardNo) {
+                return getParityBit(idCardNo) === idCardNo.charAt(17).toUpperCase();
+            }, check15IdCardNo = function(idCardNo) {
+                var check = /^[1-9]\d{7}((0[1-9])|(1[0-2]))((0[1-9])|([1-2][0-9])|(3[0-1]))\d{3}$/.test(idCardNo);
+                if (!check) return !1;
+                var addressCode = idCardNo.substring(0, 2);
+                if (check = checkAddressCode(addressCode), !check) return !1;
+                var birDayCode = "19".concat(idCardNo.substring(6, 12));
+                return check = checkBirthDayCode(birDayCode), check ? !0 : !1;
+            }, check18IdCardNo = function(idCardNo) {
+                var check = /^[1-9]\d{5}[1-9]\d{3}((0[1-9])|(1[0-2]))((0[1-9])|([1-2][0-9])|(3[0-1]))\d{3}(\d|x|X)$/.test(idCardNo);
+                if (!check) return !1;
+                var addressCode = idCardNo.substring(0, 2);
+                if (check = checkAddressCode(addressCode), !check) return !1;
+                var birDayCode = idCardNo.substring(6, 14);
+                return check = checkBirthDayCode(birDayCode), check ? checkParityBit(idCardNo) : !1;
+            }, checkIdCardNo = function(idCardNo) {
+                var check = /^\d{15}|(\d{17}(\d|x|X))$/.test(idCardNo);
+                return check ? 15 === idCardNo.length ? check15IdCardNo(idCardNo) : check18IdCardNo(idCardNo) : !1;
+            };
+            return checkIdCardNo(str);
+        },
+        "zh-TW": function(str) {
+            var ALPHABET_CODES = {
+                A: 10,
+                B: 11,
+                C: 12,
+                D: 13,
+                E: 14,
+                F: 15,
+                G: 16,
+                H: 17,
+                I: 34,
+                J: 18,
+                K: 19,
+                L: 20,
+                M: 21,
+                N: 22,
+                O: 35,
+                P: 23,
+                Q: 24,
+                R: 25,
+                S: 26,
+                T: 27,
+                U: 28,
+                V: 29,
+                W: 32,
+                X: 30,
+                Y: 31,
+                Z: 33
+            }, sanitized = str.trim().toUpperCase();
+            return /^[A-Z][0-9]{9}$/.test(sanitized) ? Array.from(sanitized).reduce(function(sum, number, index) {
+                if (0 === index) {
+                    var code = ALPHABET_CODES[number];
+                    return code % 10 * 9 + Math.floor(code / 10);
+                }
+                return 9 === index ? (10 - sum % 10 - Number(number)) % 10 === 0 : sum + Number(number) * (9 - index);
+            }, 0) : !1;
+        }
+    }, LENGTH_EAN_8 = 8, validEanRegex = /^(\d{8}|\d{13})$/, isin = /^[A-Z]{2}[0-9A-Z]{9}[0-9]$/, isbn10Maybe = /^(?:[0-9]{9}X|[0-9]{10})$/, isbn13Maybe = /^(?:[0-9]{13})$/, factor = [ 1, 3 ], issn = "^\\d{4}-?\\d{3}[\\dX]$", enUsCampusPrefix = {
+        andover: [ "10", "12" ],
+        atlanta: [ "60", "67" ],
+        austin: [ "50", "53" ],
+        brookhaven: [ "01", "02", "03", "04", "05", "06", "11", "13", "14", "16", "21", "22", "23", "25", "34", "51", "52", "54", "55", "56", "57", "58", "59", "65" ],
+        cincinnati: [ "30", "32", "35", "36", "37", "38", "61" ],
+        fresno: [ "15", "24" ],
+        internet: [ "20", "26", "27", "45", "46", "47" ],
+        kansas: [ "40", "44" ],
+        memphis: [ "94", "95" ],
+        ogden: [ "80", "90" ],
+        philadelphia: [ "33", "39", "41", "42", "43", "46", "48", "62", "63", "64", "66", "68", "71", "72", "73", "74", "75", "76", "77", "81", "82", "83", "84", "85", "86", "87", "88", "91", "92", "93", "98", "99" ],
+        sba: [ "31" ]
+    }, taxIdFormat = {
+        "bg-BG": /^\d{10}$/,
+        "cs-CZ": /^\d{6}\/{0,1}\d{3,4}$/,
+        "de-AT": /^\d{9}$/,
+        "de-DE": /^[1-9]\d{10}$/,
+        "dk-DK": /^\d{6}-{0,1}\d{4}$/,
+        "el-CY": /^[09]\d{7}[A-Z]$/,
+        "el-GR": /^([0-4]|[7-9])\d{8}$/,
+        "en-GB": /^\d{10}$|^(?!GB|NK|TN|ZZ)(?![DFIQUV])[A-Z](?![DFIQUVO])[A-Z]\d{6}[ABCD ]$/i,
+        "en-IE": /^\d{7}[A-W][A-IW]{0,1}$/i,
+        "en-US": /^\d{2}[- ]{0,1}\d{7}$/,
+        "es-ES": /^(\d{0,8}|[XYZKLM]\d{7})[A-HJ-NP-TV-Z]$/i,
+        "et-EE": /^[1-6]\d{6}(00[1-9]|0[1-9][0-9]|[1-6][0-9]{2}|70[0-9]|710)\d$/,
+        "fi-FI": /^\d{6}[-+A]\d{3}[0-9A-FHJ-NPR-Y]$/i,
+        "fr-BE": /^\d{11}$/,
+        "fr-FR": /^[0-3]\d{12}$|^[0-3]\d\s\d{2}(\s\d{3}){3}$/,
+        "fr-LU": /^\d{13}$/,
+        "hr-HR": /^\d{11}$/,
+        "hu-HU": /^8\d{9}$/,
+        "it-IT": /^[A-Z]{6}[L-NP-V0-9]{2}[A-EHLMPRST][L-NP-V0-9]{2}[A-ILMZ][L-NP-V0-9]{3}[A-Z]$/i,
+        "lv-LV": /^\d{6}-{0,1}\d{5}$/,
+        "mt-MT": /^\d{3,7}[APMGLHBZ]$|^([1-8])\1\d{7}$/i,
+        "nl-NL": /^\d{9}$/,
+        "pl-PL": /^\d{10,11}$/,
+        "pt-PT": /^\d{9}$/,
+        "ro-RO": /^\d{13}$/,
+        "sk-SK": /^\d{6}\/{0,1}\d{3,4}$/,
+        "sl-SI": /^[1-9]\d{7}$/,
+        "sv-SE": /^(\d{6}[-+]{0,1}\d{4}|(18|19|20)\d{6}[-+]{0,1}\d{4})$/
+    };
+    taxIdFormat["lb-LU"] = taxIdFormat["fr-LU"], taxIdFormat["lt-LT"] = taxIdFormat["et-EE"], 
+    taxIdFormat["nl-BE"] = taxIdFormat["fr-BE"];
+    var taxIdCheck = {
+        "bg-BG": bgBgCheck,
+        "cs-CZ": csCzCheck,
+        "de-AT": deAtCheck,
+        "de-DE": deDeCheck,
+        "dk-DK": dkDkCheck,
+        "el-CY": elCyCheck,
+        "el-GR": elGrCheck,
+        "en-IE": enIeCheck,
+        "en-US": enUsCheck,
+        "es-ES": esEsCheck,
+        "et-EE": etEeCheck,
+        "fi-FI": fiFiCheck,
+        "fr-BE": frBeCheck,
+        "fr-FR": frFrCheck,
+        "fr-LU": frLuCheck,
+        "hr-HR": hrHrCheck,
+        "hu-HU": huHuCheck,
+        "it-IT": itItCheck,
+        "lv-LV": lvLvCheck,
+        "mt-MT": mtMtCheck,
+        "nl-NL": nlNlCheck,
+        "pl-PL": plPlCheck,
+        "pt-PT": ptPtCheck,
+        "ro-RO": roRoCheck,
+        "sk-SK": skSkCheck,
+        "sl-SI": slSiCheck,
+        "sv-SE": svSeCheck
+    };
+    taxIdCheck["lb-LU"] = taxIdCheck["fr-LU"], taxIdCheck["lt-LT"] = taxIdCheck["et-EE"], 
+    taxIdCheck["nl-BE"] = taxIdCheck["fr-BE"];
+    var allsymbols = /[-\\\/!@#$%\^&\*\(\)\+\=\[\]]+/g, sanitizeRegexes = {
+        "de-AT": allsymbols,
+        "de-DE": /[\/\\]/g,
+        "fr-BE": allsymbols
+    };
+    sanitizeRegexes["nl-BE"] = sanitizeRegexes["fr-BE"];
+    var phones = {
+        "am-AM": /^(\+?374|0)((10|[9|7][0-9])\d{6}$|[2-4]\d{7}$)/,
         "ar-AE": /^((\+?971)|0)?5[024568]\d{7}$/,
+        "ar-BH": /^(\+?973)?(3|6)\d{7}$/,
         "ar-DZ": /^(\+?213|0)(5|6|7)\d{8}$/,
-        "ar-EG": /^((\+?20)|0)?1[012]\d{8}$/,
+        "ar-LB": /^(\+?961)?((3|81)\d{6}|7\d{7})$/,
+        "ar-EG": /^((\+?20)|0)?1[0125]\d{8}$/,
+        "ar-IQ": /^(\+?964|0)?7[0-9]\d{8}$/,
         "ar-JO": /^(\+?962|0)?7[789]\d{7}$/,
+        "ar-KW": /^(\+?965)[569]\d{7}$/,
+        "ar-LY": /^((\+?218)|0)?(9[1-6]\d{7}|[1-8]\d{7,9})$/,
+        "ar-MA": /^(?:(?:\+|00)212|0)[5-7]\d{8}$/,
         "ar-SA": /^(!?(\+?966)|0)?5\d{8}$/,
         "ar-SY": /^(!?(\+?963)|0)?9\d{8}$/,
+        "ar-TN": /^(\+?216)?[2459]\d{7}$/,
+        "az-AZ": /^(\+994|0)(5[015]|7[07]|99)\d{7}$/,
+        "bs-BA": /^((((\+|00)3876)|06))((([0-3]|[5-6])\d{6})|(4\d{7}))$/,
         "be-BY": /^(\+?375)?(24|25|29|33|44)\d{7}$/,
         "bg-BG": /^(\+?359|0)?8[789]\d{7}$/,
+        "bn-BD": /^(\+?880|0)1[13456789][0-9]{8}$/,
+        "ca-AD": /^(\+376)?[346]\d{5}$/,
         "cs-CZ": /^(\+?420)? ?[1-9][0-9]{2} ?[0-9]{3} ?[0-9]{3}$/,
         "da-DK": /^(\+?45)?\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{2}$/,
-        "de-DE": /^(\+?49[ \.\-])?([\(]{1}[0-9]{1,6}[\)])?([0-9 \.\-\/]{3,20})((x|ext|extension)[ ]?[0-9]{1,4})?$/,
+        "de-DE": /^(\+49)?0?[1|3]([0|5][0-45-9]\d|6([23]|0\d?)|7([0-57-9]|6\d))\d{7}$/,
+        "de-AT": /^(\+43|0)\d{1,4}\d{3,12}$/,
+        "de-CH": /^(\+41|0)(7[5-9])\d{1,7}$/,
+        "de-LU": /^(\+352)?((6\d1)\d{6})$/,
         "el-GR": /^(\+?30|0)?(69\d{8})$/,
         "en-AU": /^(\+?61|0)4\d{8}$/,
         "en-GB": /^(\+?44|0)7\d{9}$/,
-        "en-HK": /^(\+?852\-?)?[456789]\d{3}\-?\d{4}$/,
+        "en-GG": /^(\+?44|0)1481\d{6}$/,
+        "en-GH": /^(\+233|0)(20|50|24|54|27|57|26|56|23|28)\d{7}$/,
+        "en-HK": /^(\+?852[-\s]?)?[456789]\d{3}[-\s]?\d{4}$/,
+        "en-MO": /^(\+?853[-\s]?)?[6]\d{3}[-\s]?\d{4}$/,
+        "en-IE": /^(\+?353|0)8[356789]\d{7}$/,
         "en-IN": /^(\+?91|0)?[6789]\d{9}$/,
-        "en-KE": /^(\+?254|0)?[7]\d{8}$/,
+        "en-KE": /^(\+?254|0)(7|1)\d{8}$/,
+        "en-MT": /^(\+?356|0)?(99|79|77|21|27|22|25)[0-9]{6}$/,
+        "en-MU": /^(\+?230|0)?\d{8}$/,
         "en-NG": /^(\+?234|0)?[789]\d{9}$/,
-        "en-NZ": /^(\+?64|0)2\d{7,9}$/,
+        "en-NZ": /^(\+?64|0)[28]\d{7,9}$/,
         "en-PK": /^((\+92)|(0092))-{0,1}\d{3}-{0,1}\d{7}$|^\d{11}$|^\d{4}-\d{7}$/,
+        "en-PH": /^(09|\+639)\d{9}$/,
         "en-RW": /^(\+?250|0)?[7]\d{8}$/,
-        "en-SG": /^(\+65)?[89]\d{7}$/,
+        "en-SG": /^(\+65)?[689]\d{7}$/,
+        "en-SL": /^(?:0|94|\+94)?(7(0|1|2|5|6|7|8)( |-)?\d)\d{6}$/,
         "en-TZ": /^(\+?255|0)?[67]\d{8}$/,
         "en-UG": /^(\+?256|0)?[7]\d{8}$/,
-        "en-US": /^(\+?1)?[2-9]\d{2}[2-9](?!11)\d{6}$/,
+        "en-US": /^((\+1|1)?( |-)?)?(\([2-9][0-9]{2}\)|[2-9][0-9]{2})( |-)?([2-9][0-9]{2}( |-)?[0-9]{4})$/,
         "en-ZA": /^(\+?27|0)\d{9}$/,
         "en-ZM": /^(\+?26)?09[567]\d{7}$/,
-        "es-ES": /^(\+?34)?(6\d{1}|7[1234])\d{7}$/,
+        "en-ZW": /^(\+263)[0-9]{9}$/,
+        "es-AR": /^\+?549(11|[2368]\d)\d{8}$/,
+        "es-BO": /^(\+?591)?(6|7)\d{7}$/,
+        "es-CO": /^(\+?57)?([1-8]{1}|3[0-9]{2})?[2-9]{1}\d{6}$/,
+        "es-CL": /^(\+?56|0)[2-9]\d{1}\d{7}$/,
+        "es-CR": /^(\+506)?[2-8]\d{7}$/,
+        "es-DO": /^(\+?1)?8[024]9\d{7}$/,
+        "es-HN": /^(\+?504)?[9|8]\d{7}$/,
+        "es-EC": /^(\+?593|0)([2-7]|9[2-9])\d{7}$/,
+        "es-ES": /^(\+?34)?[6|7]\d{8}$/,
+        "es-PE": /^(\+?51)?9\d{8}$/,
+        "es-MX": /^(\+?52)?(1|01)?\d{10,11}$/,
+        "es-PA": /^(\+?507)\d{7,8}$/,
+        "es-PY": /^(\+?595|0)9[9876]\d{7}$/,
+        "es-UY": /^(\+598|0)9[1-9][\d]{6}$/,
         "et-EE": /^(\+?372)?\s?(5|8[1-4])\s?([0-9]\s?){6,7}$/,
         "fa-IR": /^(\+?98[\-\s]?|0)9[0-39]\d[\-\s]?\d{3}[\-\s]?\d{4}$/,
         "fi-FI": /^(\+?358|0)\s?(4(0|1|2|4|5|6)?|50)\s?(\d\s?){4,8}\d$/,
+        "fj-FJ": /^(\+?679)?\s?\d{3}\s?\d{4}$/,
         "fo-FO": /^(\+?298)?\s?\d{2}\s?\d{2}\s?\d{2}$/,
         "fr-FR": /^(\+?33|0)[67]\d{8}$/,
-        "he-IL": /^(\+972|0)([23489]|5[012345689]|77)[1-9]\d{6}/,
+        "fr-GF": /^(\+?594|0|00594)[67]\d{8}$/,
+        "fr-GP": /^(\+?590|0|00590)[67]\d{8}$/,
+        "fr-MQ": /^(\+?596|0|00596)[67]\d{8}$/,
+        "fr-RE": /^(\+?262|0|00262)[67]\d{8}$/,
+        "he-IL": /^(\+972|0)([23489]|5[012345689]|77)[1-9]\d{6}$/,
         "hu-HU": /^(\+?36)(20|30|70)\d{7}$/,
-        "id-ID": /^(\+?62|0[1-9])[\s|\d]+$/,
+        "id-ID": /^(\+?62|0)8(1[123456789]|2[1238]|3[1238]|5[12356789]|7[78]|9[56789]|8[123456789])([\s?|\d]{5,11})$/,
         "it-IT": /^(\+?39)?\s?3\d{2} ?\d{6,7}$/,
-        "ja-JP": /^(\+?81|0)[789]0[ \-]?[1-9]\d{2}[ \-]?\d{5}$/,
+        "it-SM": /^((\+378)|(0549)|(\+390549)|(\+3780549))?6\d{5,9}$/,
+        "ja-JP": /^(\+81[ \-]?(\(0\))?|0)[6789]0[ \-]?\d{4}[ \-]?\d{4}$/,
+        "ka-GE": /^(\+?995)?(5|79)\d{7}$/,
         "kk-KZ": /^(\+?7|8)?7\d{9}$/,
         "kl-GL": /^(\+?299)?\s?\d{2}\s?\d{2}\s?\d{2}$/,
         "ko-KR": /^((\+?82)[ \-]?)?0?1([0|1|6|7|8|9]{1})[ \-]?\d{3,4}[ \-]?\d{4}$/,
         "lt-LT": /^(\+370|8)\d{8}$/,
-        "ms-MY": /^(\+?6?01){1}(([145]{1}(\-|\s)?\d{7,8})|([236789]{1}(\s|\-)?\d{7}))$/,
+        "ms-MY": /^(\+?6?01){1}(([0145]{1}(\-|\s)?\d{7,8})|([236789]{1}(\s|\-)?\d{7}))$/,
         "nb-NO": /^(\+?47)?[49]\d{7}$/,
+        "ne-NP": /^(\+?977)?9[78]\d{8}$/,
         "nl-BE": /^(\+?32|0)4?\d{8}$/,
+        "nl-NL": /^(((\+|00)?31\(0\))|((\+|00)?31)|0)6{1}\d{8}$/,
         "nn-NO": /^(\+?47)?[49]\d{7}$/,
         "pl-PL": /^(\+?48)? ?[5-8]\d ?\d{3} ?\d{2} ?\d{2}$/,
-        "pt-BR": /^(\+?55|0)\-?[1-9]{2}\-?[2-9]{1}\d{3,4}\-?\d{4}$/,
+        "pt-BR": /^((\+?55\ ?[1-9]{2}\ ?)|(\+?55\ ?\([1-9]{2}\)\ ?)|(0[1-9]{2}\ ?)|(\([1-9]{2}\)\ ?)|([1-9]{2}\ ?))((\d{4}\-?\d{4})|(9[2-9]{1}\d{3}\-?\d{4}))$/,
         "pt-PT": /^(\+?351)?9[1236]\d{7}$/,
         "ro-RO": /^(\+?4?0)\s?7\d{2}(\/|\s|\.|\-)?\d{3}(\s|\.|\-)?\d{3}$/,
         "ru-RU": /^(\+?7|8)?9\d{9}$/,
+        "sl-SI": /^(\+386\s?|0)(\d{1}\s?\d{3}\s?\d{2}\s?\d{2}|\d{2}\s?\d{3}\s?\d{3})$/,
         "sk-SK": /^(\+?421)? ?[1-9][0-9]{2} ?[0-9]{3} ?[0-9]{3}$/,
+        "sq-AL": /^(\+355|0)6[789]\d{6}$/,
         "sr-RS": /^(\+3816|06)[- \d]{5,9}$/,
+        "sv-SE": /^(\+?46|0)[\s\-]?7[\s\-]?[02369]([\s\-]?\d){7}$/,
         "th-TH": /^(\+66|66|0)\d{9}$/,
         "tr-TR": /^(\+?90|0)?5\d{9}$/,
         "uk-UA": /^(\+?38|8)?0\d{9}$/,
-        "vi-VN": /^(\+?84|0)?((1(2([0-9])|6([2-9])|88|99))|(9((?!5)[0-9])))([0-9]{7})$/,
-        "zh-CN": /^(\+?0?86\-?)?1[3456789]\d{9}$/,
+        "uz-UZ": /^(\+?998)?(6[125-79]|7[1-69]|88|9\d)\d{7}$/,
+        "vi-VN": /^(\+?84|0)((3([2-9]))|(5([2689]))|(7([0|6-9]))|(8([1-6|89]))|(9([0-9])))([0-9]{7})$/,
+        "zh-CN": /^((\+|00)86)?1([3568][0-9]|4[579]|6[67]|7[01235678]|9[012356789])[0-9]{8}$/,
         "zh-TW": /^(\+?886\-?|0)?9\d{8}$/
     };
-    phones["en-CA"] = phones["en-US"], phones["fr-BE"] = phones["nl-BE"], phones["zh-HK"] = phones["en-HK"];
-    var default_currency_options = {
+    phones["en-CA"] = phones["en-US"], phones["fr-CA"] = phones["en-CA"], phones["fr-BE"] = phones["nl-BE"], 
+    phones["zh-HK"] = phones["en-HK"], phones["zh-MO"] = phones["en-MO"], phones["ga-IE"] = phones["en-IE"];
+    var locales$3 = Object.keys(phones), eth = /^(0x)[0-9a-f]{40}$/i, default_currency_options = {
         symbol: "$",
         require_symbol: !1,
         allow_space_after_symbol: !1,
@@ -28563,58 +30495,80 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         require_decimal: !1,
         digits_after_decimal: [ 2 ],
         allow_space_after_digits: !1
-    }, iso8601 = /^([\+-]?\d{4}(?!\d{2}\b))((-?)((0[1-9]|1[0-2])(\3([12]\d|0[1-9]|3[01]))?|W([0-4]\d|5[0-2])(-?[1-7])?|(00[1-9]|0[1-9]\d|[12]\d{2}|3([0-5]\d|6[1-6])))([T\s]((([01]\d|2[0-3])((:?)[0-5]\d)?|24:?00)([\.,]\d+(?!:))?)?(\17[0-5]\d([\.,]\d+)?)?([zZ]|([\+-])([01]\d|2[0-3]):?([0-5]\d)?)?)?)?$/, dateFullYear = /[0-9]{4}/, dateMonth = /(0[1-9]|1[0-2])/, dateMDay = /([12]\d|0[1-9]|3[01])/, timeHour = /([01][0-9]|2[0-3])/, timeMinute = /[0-5][0-9]/, timeSecond = /([0-5][0-9]|60)/, timeSecFrac = /(\.[0-9]+)?/, timeNumOffset = new RegExp("[-+]" + timeHour.source + ":" + timeMinute.source), timeOffset = new RegExp("([zZ]|" + timeNumOffset.source + ")"), partialTime = new RegExp(timeHour.source + ":" + timeMinute.source + ":" + timeSecond.source + timeSecFrac.source), fullDate = new RegExp(dateFullYear.source + "-" + dateMonth.source + "-" + dateMDay.source), fullTime = new RegExp("" + partialTime.source + timeOffset.source), rfc3339 = new RegExp(fullDate.source + "[ tT]" + fullTime.source), validISO31661Alpha2CountriesCodes = [ "AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AS", "AT", "AU", "AW", "AX", "AZ", "BA", "BB", "BD", "BE", "BF", "BG", "BH", "BI", "BJ", "BL", "BM", "BN", "BO", "BQ", "BR", "BS", "BT", "BV", "BW", "BY", "BZ", "CA", "CC", "CD", "CF", "CG", "CH", "CI", "CK", "CL", "CM", "CN", "CO", "CR", "CU", "CV", "CW", "CX", "CY", "CZ", "DE", "DJ", "DK", "DM", "DO", "DZ", "EC", "EE", "EG", "EH", "ER", "ES", "ET", "FI", "FJ", "FK", "FM", "FO", "FR", "GA", "GB", "GD", "GE", "GF", "GG", "GH", "GI", "GL", "GM", "GN", "GP", "GQ", "GR", "GS", "GT", "GU", "GW", "GY", "HK", "HM", "HN", "HR", "HT", "HU", "ID", "IE", "IL", "IM", "IN", "IO", "IQ", "IR", "IS", "IT", "JE", "JM", "JO", "JP", "KE", "KG", "KH", "KI", "KM", "KN", "KP", "KR", "KW", "KY", "KZ", "LA", "LB", "LC", "LI", "LK", "LR", "LS", "LT", "LU", "LV", "LY", "MA", "MC", "MD", "ME", "MF", "MG", "MH", "MK", "ML", "MM", "MN", "MO", "MP", "MQ", "MR", "MS", "MT", "MU", "MV", "MW", "MX", "MY", "MZ", "NA", "NC", "NE", "NF", "NG", "NI", "NL", "NO", "NP", "NR", "NU", "NZ", "OM", "PA", "PE", "PF", "PG", "PH", "PK", "PL", "PM", "PN", "PR", "PS", "PT", "PW", "PY", "QA", "RE", "RO", "RS", "RU", "RW", "SA", "SB", "SC", "SD", "SE", "SG", "SH", "SI", "SJ", "SK", "SL", "SM", "SN", "SO", "SR", "SS", "ST", "SV", "SX", "SY", "SZ", "TC", "TD", "TF", "TG", "TH", "TJ", "TK", "TL", "TM", "TN", "TO", "TR", "TT", "TV", "TW", "TZ", "UA", "UG", "UM", "US", "UY", "UZ", "VA", "VC", "VE", "VG", "VI", "VN", "VU", "WF", "WS", "YE", "YT", "ZA", "ZM", "ZW" ], validISO31661Alpha3CountriesCodes = [ "AFG", "ALA", "ALB", "DZA", "ASM", "AND", "AGO", "AIA", "ATA", "ATG", "ARG", "ARM", "ABW", "AUS", "AUT", "AZE", "BHS", "BHR", "BGD", "BRB", "BLR", "BEL", "BLZ", "BEN", "BMU", "BTN", "BOL", "BES", "BIH", "BWA", "BVT", "BRA", "IOT", "BRN", "BGR", "BFA", "BDI", "KHM", "CMR", "CAN", "CPV", "CYM", "CAF", "TCD", "CHL", "CHN", "CXR", "CCK", "COL", "COM", "COG", "COD", "COK", "CRI", "CIV", "HRV", "CUB", "CUW", "CYP", "CZE", "DNK", "DJI", "DMA", "DOM", "ECU", "EGY", "SLV", "GNQ", "ERI", "EST", "ETH", "FLK", "FRO", "FJI", "FIN", "FRA", "GUF", "PYF", "ATF", "GAB", "GMB", "GEO", "DEU", "GHA", "GIB", "GRC", "GRL", "GRD", "GLP", "GUM", "GTM", "GGY", "GIN", "GNB", "GUY", "HTI", "HMD", "VAT", "HND", "HKG", "HUN", "ISL", "IND", "IDN", "IRN", "IRQ", "IRL", "IMN", "ISR", "ITA", "JAM", "JPN", "JEY", "JOR", "KAZ", "KEN", "KIR", "PRK", "KOR", "KWT", "KGZ", "LAO", "LVA", "LBN", "LSO", "LBR", "LBY", "LIE", "LTU", "LUX", "MAC", "MKD", "MDG", "MWI", "MYS", "MDV", "MLI", "MLT", "MHL", "MTQ", "MRT", "MUS", "MYT", "MEX", "FSM", "MDA", "MCO", "MNG", "MNE", "MSR", "MAR", "MOZ", "MMR", "NAM", "NRU", "NPL", "NLD", "NCL", "NZL", "NIC", "NER", "NGA", "NIU", "NFK", "MNP", "NOR", "OMN", "PAK", "PLW", "PSE", "PAN", "PNG", "PRY", "PER", "PHL", "PCN", "POL", "PRT", "PRI", "QAT", "REU", "ROU", "RUS", "RWA", "BLM", "SHN", "KNA", "LCA", "MAF", "SPM", "VCT", "WSM", "SMR", "STP", "SAU", "SEN", "SRB", "SYC", "SLE", "SGP", "SXM", "SVK", "SVN", "SLB", "SOM", "ZAF", "SGS", "SSD", "ESP", "LKA", "SDN", "SUR", "SJM", "SWZ", "SWE", "CHE", "SYR", "TWN", "TJK", "TZA", "THA", "TLS", "TGO", "TKL", "TON", "TTO", "TUN", "TUR", "TKM", "TCA", "TUV", "UGA", "UKR", "ARE", "GBR", "USA", "UMI", "URY", "UZB", "VUT", "VEN", "VNM", "VGB", "VIR", "WLF", "ESH", "YEM", "ZMB", "ZWE" ], notBase64 = /[^A-Z0-9+\/=]/i, validMediaType = /^[a-z]+\/[a-z0-9\-\+]+$/i, validAttribute = /^[a-z\-]+=[a-z0-9\-]+$/i, validData = /^[a-z0-9!\$&'\(\)\*\+,;=\-\._~:@\/\?%\s]*$/i, mimeTypeSimple = /^(application|audio|font|image|message|model|multipart|text|video)\/[a-zA-Z0-9\.\-\+]{1,100}$/i, mimeTypeText = /^text\/[a-zA-Z0-9\.\-\+]{1,100};\s?charset=("[a-zA-Z0-9\.\-\+\s]{0,70}"|[a-zA-Z0-9\.\-\+]{0,70})(\s?\([a-zA-Z0-9\.\-\+\s]{1,20}\))?$/i, mimeTypeMultipart = /^multipart\/[a-zA-Z0-9\.\-\+]{1,100}(;\s?(boundary|charset)=("[a-zA-Z0-9\.\-\+\s]{0,70}"|[a-zA-Z0-9\.\-\+]{0,70})(\s?\([a-zA-Z0-9\.\-\+\s]{1,20}\))?){0,2}$/i, lat = /^\(?[+-]?(90(\.0+)?|[1-8]?\d(\.\d+)?)$/, long = /^\s?[+-]?(180(\.0+)?|1[0-7]\d(\.\d+)?|\d{1,2}(\.\d+)?)\)?$/, isLatLong = function(str) {
-        if (assertString(str), !str.includes(",")) return !1;
-        var pair = str.split(",");
-        return lat.test(pair[0]) && long.test(pair[1]);
+    }, btc = /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,39}$/, iso8601 = /^([\+-]?\d{4}(?!\d{2}\b))((-?)((0[1-9]|1[0-2])(\3([12]\d|0[1-9]|3[01]))?|W([0-4]\d|5[0-3])(-?[1-7])?|(00[1-9]|0[1-9]\d|[12]\d{2}|3([0-5]\d|6[1-6])))([T\s]((([01]\d|2[0-3])((:?)[0-5]\d)?|24:?00)([\.,]\d+(?!:))?)?(\17[0-5]\d([\.,]\d+)?)?([zZ]|([\+-])([01]\d|2[0-3]):?([0-5]\d)?)?)?)?$/, iso8601StrictSeparator = /^([\+-]?\d{4}(?!\d{2}\b))((-?)((0[1-9]|1[0-2])(\3([12]\d|0[1-9]|3[01]))?|W([0-4]\d|5[0-3])(-?[1-7])?|(00[1-9]|0[1-9]\d|[12]\d{2}|3([0-5]\d|6[1-6])))([T]((([01]\d|2[0-3])((:?)[0-5]\d)?|24:?00)([\.,]\d+(?!:))?)?(\17[0-5]\d([\.,]\d+)?)?([zZ]|([\+-])([01]\d|2[0-3]):?([0-5]\d)?)?)?)?$/, isValidDate = function(str) {
+        var ordinalMatch = str.match(/^(\d{4})-?(\d{3})([ T]{1}\.*|$)/);
+        if (ordinalMatch) {
+            var oYear = Number(ordinalMatch[1]), oDay = Number(ordinalMatch[2]);
+            return oYear % 4 === 0 && oYear % 100 !== 0 || oYear % 400 === 0 ? 366 >= oDay : 365 >= oDay;
+        }
+        var match = str.match(/(\d{4})-?(\d{0,2})-?(\d*)/).map(Number), year = match[1], month = match[2], day = match[3], monthString = month ? "0".concat(month).slice(-2) : month, dayString = day ? "0".concat(day).slice(-2) : day, d = new Date("".concat(year, "-").concat(monthString || "01", "-").concat(dayString || "01"));
+        return month && day ? d.getUTCFullYear() === year && d.getUTCMonth() + 1 === month && d.getUTCDate() === day : !0;
+    }, dateFullYear = /[0-9]{4}/, dateMonth = /(0[1-9]|1[0-2])/, dateMDay = /([12]\d|0[1-9]|3[01])/, timeHour = /([01][0-9]|2[0-3])/, timeMinute = /[0-5][0-9]/, timeSecond = /([0-5][0-9]|60)/, timeSecFrac = /(\.[0-9]+)?/, timeNumOffset = new RegExp("[-+]".concat(timeHour.source, ":").concat(timeMinute.source)), timeOffset = new RegExp("([zZ]|".concat(timeNumOffset.source, ")")), partialTime = new RegExp("".concat(timeHour.source, ":").concat(timeMinute.source, ":").concat(timeSecond.source).concat(timeSecFrac.source)), fullDate = new RegExp("".concat(dateFullYear.source, "-").concat(dateMonth.source, "-").concat(dateMDay.source)), fullTime = new RegExp("".concat(partialTime.source).concat(timeOffset.source)), rfc3339 = new RegExp("".concat(fullDate.source, "[ tT]").concat(fullTime.source)), validISO31661Alpha2CountriesCodes = [ "AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AS", "AT", "AU", "AW", "AX", "AZ", "BA", "BB", "BD", "BE", "BF", "BG", "BH", "BI", "BJ", "BL", "BM", "BN", "BO", "BQ", "BR", "BS", "BT", "BV", "BW", "BY", "BZ", "CA", "CC", "CD", "CF", "CG", "CH", "CI", "CK", "CL", "CM", "CN", "CO", "CR", "CU", "CV", "CW", "CX", "CY", "CZ", "DE", "DJ", "DK", "DM", "DO", "DZ", "EC", "EE", "EG", "EH", "ER", "ES", "ET", "FI", "FJ", "FK", "FM", "FO", "FR", "GA", "GB", "GD", "GE", "GF", "GG", "GH", "GI", "GL", "GM", "GN", "GP", "GQ", "GR", "GS", "GT", "GU", "GW", "GY", "HK", "HM", "HN", "HR", "HT", "HU", "ID", "IE", "IL", "IM", "IN", "IO", "IQ", "IR", "IS", "IT", "JE", "JM", "JO", "JP", "KE", "KG", "KH", "KI", "KM", "KN", "KP", "KR", "KW", "KY", "KZ", "LA", "LB", "LC", "LI", "LK", "LR", "LS", "LT", "LU", "LV", "LY", "MA", "MC", "MD", "ME", "MF", "MG", "MH", "MK", "ML", "MM", "MN", "MO", "MP", "MQ", "MR", "MS", "MT", "MU", "MV", "MW", "MX", "MY", "MZ", "NA", "NC", "NE", "NF", "NG", "NI", "NL", "NO", "NP", "NR", "NU", "NZ", "OM", "PA", "PE", "PF", "PG", "PH", "PK", "PL", "PM", "PN", "PR", "PS", "PT", "PW", "PY", "QA", "RE", "RO", "RS", "RU", "RW", "SA", "SB", "SC", "SD", "SE", "SG", "SH", "SI", "SJ", "SK", "SL", "SM", "SN", "SO", "SR", "SS", "ST", "SV", "SX", "SY", "SZ", "TC", "TD", "TF", "TG", "TH", "TJ", "TK", "TL", "TM", "TN", "TO", "TR", "TT", "TV", "TW", "TZ", "UA", "UG", "UM", "US", "UY", "UZ", "VA", "VC", "VE", "VG", "VI", "VN", "VU", "WF", "WS", "YE", "YT", "ZA", "ZM", "ZW" ], validISO31661Alpha3CountriesCodes = [ "AFG", "ALA", "ALB", "DZA", "ASM", "AND", "AGO", "AIA", "ATA", "ATG", "ARG", "ARM", "ABW", "AUS", "AUT", "AZE", "BHS", "BHR", "BGD", "BRB", "BLR", "BEL", "BLZ", "BEN", "BMU", "BTN", "BOL", "BES", "BIH", "BWA", "BVT", "BRA", "IOT", "BRN", "BGR", "BFA", "BDI", "KHM", "CMR", "CAN", "CPV", "CYM", "CAF", "TCD", "CHL", "CHN", "CXR", "CCK", "COL", "COM", "COG", "COD", "COK", "CRI", "CIV", "HRV", "CUB", "CUW", "CYP", "CZE", "DNK", "DJI", "DMA", "DOM", "ECU", "EGY", "SLV", "GNQ", "ERI", "EST", "ETH", "FLK", "FRO", "FJI", "FIN", "FRA", "GUF", "PYF", "ATF", "GAB", "GMB", "GEO", "DEU", "GHA", "GIB", "GRC", "GRL", "GRD", "GLP", "GUM", "GTM", "GGY", "GIN", "GNB", "GUY", "HTI", "HMD", "VAT", "HND", "HKG", "HUN", "ISL", "IND", "IDN", "IRN", "IRQ", "IRL", "IMN", "ISR", "ITA", "JAM", "JPN", "JEY", "JOR", "KAZ", "KEN", "KIR", "PRK", "KOR", "KWT", "KGZ", "LAO", "LVA", "LBN", "LSO", "LBR", "LBY", "LIE", "LTU", "LUX", "MAC", "MKD", "MDG", "MWI", "MYS", "MDV", "MLI", "MLT", "MHL", "MTQ", "MRT", "MUS", "MYT", "MEX", "FSM", "MDA", "MCO", "MNG", "MNE", "MSR", "MAR", "MOZ", "MMR", "NAM", "NRU", "NPL", "NLD", "NCL", "NZL", "NIC", "NER", "NGA", "NIU", "NFK", "MNP", "NOR", "OMN", "PAK", "PLW", "PSE", "PAN", "PNG", "PRY", "PER", "PHL", "PCN", "POL", "PRT", "PRI", "QAT", "REU", "ROU", "RUS", "RWA", "BLM", "SHN", "KNA", "LCA", "MAF", "SPM", "VCT", "WSM", "SMR", "STP", "SAU", "SEN", "SRB", "SYC", "SLE", "SGP", "SXM", "SVK", "SVN", "SLB", "SOM", "ZAF", "SGS", "SSD", "ESP", "LKA", "SDN", "SUR", "SJM", "SWZ", "SWE", "CHE", "SYR", "TWN", "TJK", "TZA", "THA", "TLS", "TGO", "TKL", "TON", "TTO", "TUN", "TUR", "TKM", "TCA", "TUV", "UGA", "UKR", "ARE", "GBR", "USA", "UMI", "URY", "UZB", "VUT", "VEN", "VNM", "VGB", "VIR", "WLF", "ESH", "YEM", "ZMB", "ZWE" ], base32 = /^[A-Z2-7]+=*$/, base58Reg = /^[A-HJ-NP-Za-km-z1-9]*$/, validMediaType = /^[a-z]+\/[a-z0-9\-\+]+$/i, validAttribute = /^[a-z\-]+=[a-z0-9\-]+$/i, validData = /^[a-z0-9!\$&'\(\)\*\+,;=\-\._~:@\/\?%\s]*$/i, magnetURI = /^magnet:\?xt=urn:[a-z0-9]+:[a-z0-9]{32,40}&dn=.+&tr=.+$/i, mimeTypeSimple = /^(application|audio|font|image|message|model|multipart|text|video)\/[a-zA-Z0-9\.\-\+]{1,100}$/i, mimeTypeText = /^text\/[a-zA-Z0-9\.\-\+]{1,100};\s?charset=("[a-zA-Z0-9\.\-\+\s]{0,70}"|[a-zA-Z0-9\.\-\+]{0,70})(\s?\([a-zA-Z0-9\.\-\+\s]{1,20}\))?$/i, mimeTypeMultipart = /^multipart\/[a-zA-Z0-9\.\-\+]{1,100}(;\s?(boundary|charset)=("[a-zA-Z0-9\.\-\+\s]{0,70}"|[a-zA-Z0-9\.\-\+]{0,70})(\s?\([a-zA-Z0-9\.\-\+\s]{1,20}\))?){0,2}$/i, lat = /^\(?[+-]?(90(\.0+)?|[1-8]?\d(\.\d+)?)$/, _long = /^\s?[+-]?(180(\.0+)?|1[0-7]\d(\.\d+)?|\d{1,2}(\.\d+)?)\)?$/, latDMS = /^(([1-8]?\d)\D+([1-5]?\d|60)\D+([1-5]?\d|60)(\.\d+)?|90\D+0\D+0)\D+[NSns]?$/i, longDMS = /^\s*([1-7]?\d{1,2}\D+([1-5]?\d|60)\D+([1-5]?\d|60)(\.\d+)?|180\D+0\D+0)\D+[EWew]?$/i, defaultLatLongOptions = {
+        checkDMS: !1
     }, threeDigit = /^\d{3}$/, fourDigit = /^\d{4}$/, fiveDigit = /^\d{5}$/, sixDigit = /^\d{6}$/, patterns = {
+        AD: /^AD\d{3}$/,
         AT: fourDigit,
         AU: fourDigit,
+        AZ: /^AZ\d{4}$/,
         BE: fourDigit,
         BG: fourDigit,
+        BR: /^\d{5}-\d{3}$/,
+        BY: /2[1-4]{1}\d{4}$/,
         CA: /^[ABCEGHJKLMNPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][\s\-]?\d[ABCEGHJ-NPRSTV-Z]\d$/i,
         CH: fourDigit,
+        CN: /^(0[1-7]|1[012356]|2[0-7]|3[0-6]|4[0-7]|5[1-7]|6[1-7]|7[1-5]|8[1345]|9[09])\d{4}$/,
         CZ: /^\d{3}\s?\d{2}$/,
         DE: fiveDigit,
         DK: fourDigit,
+        DO: fiveDigit,
         DZ: fiveDigit,
-        ES: fiveDigit,
+        EE: fiveDigit,
+        ES: /^(5[0-2]{1}|[0-4]{1}\d{1})\d{3}$/,
         FI: fiveDigit,
         FR: /^\d{2}\s?\d{3}$/,
         GB: /^(gir\s?0aa|[a-z]{1,2}\d[\da-z]?\s?(\d[a-z]{2})?)$/i,
         GR: /^\d{3}\s?\d{2}$/,
-        IL: fiveDigit,
-        IN: sixDigit,
+        HR: /^([1-5]\d{4}$)/,
+        HT: /^HT\d{4}$/,
+        HU: fourDigit,
+        ID: fiveDigit,
+        IE: /^(?!.*(?:o))[A-z]\d[\dw]\s\w{4}$/i,
+        IL: /^(\d{5}|\d{7})$/,
+        IN: /^((?!10|29|35|54|55|65|66|86|87|88|89)[1-9][0-9]{5})$/,
+        IR: /\b(?!(\d)\1{3})[13-9]{4}[1346-9][013-9]{5}\b/,
         IS: threeDigit,
         IT: fiveDigit,
         JP: /^\d{3}\-\d{4}$/,
         KE: fiveDigit,
         LI: /^(948[5-9]|949[0-7])$/,
+        LT: /^LT\-\d{5}$/,
+        LU: fourDigit,
+        LV: /^LV\-\d{4}$/,
         MX: fiveDigit,
+        MT: /^[A-Za-z]{3}\s{0,1}\d{4}$/,
+        MY: fiveDigit,
         NL: /^\d{4}\s?[a-z]{2}$/i,
         NO: fourDigit,
+        NP: /^(10|21|22|32|33|34|44|45|56|57)\d{3}$|^(977)$/i,
+        NZ: fourDigit,
         PL: /^\d{2}\-\d{3}$/,
+        PR: /^00[679]\d{2}([ -]\d{4})?$/,
         PT: /^\d{4}\-\d{3}?$/,
         RO: sixDigit,
         RU: sixDigit,
         SA: fiveDigit,
-        SE: /^\d{3}\s?\d{2}$/,
+        SE: /^[1-9]\d{2}\s?\d{2}$/,
+        SG: sixDigit,
+        SI: fourDigit,
         SK: /^\d{3}\s?\d{2}$/,
+        TH: fiveDigit,
+        TN: fourDigit,
         TW: /^\d{3}(\d{2})?$/,
+        UA: fiveDigit,
         US: /^\d{5}(-\d{4})?$/,
         ZA: fourDigit,
         ZM: fiveDigit
-    }, isPostalCode = function(str, locale) {
-        if (assertString(str), locale in patterns) return patterns[locale].test(str);
-        if ("any" === locale) {
-            for (var key in patterns) if (patterns.hasOwnProperty(key)) {
-                var pattern = patterns[key];
-                if (pattern.test(str)) return !0;
-            }
-            return !1;
-        }
-        throw new Error("Invalid locale '" + locale + "'");
-    }, default_normalize_email_options = {
+    }, locales$4 = Object.keys(patterns), default_normalize_email_options = {
         all_lowercase: !0,
         gmail_lowercase: !0,
         gmail_remove_dots: !0,
@@ -28627,7 +30581,22 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         yandex_lowercase: !0,
         icloud_lowercase: !0,
         icloud_remove_subaddress: !0
-    }, icloud_domains = [ "icloud.com", "me.com" ], outlookdotcom_domains = [ "hotmail.at", "hotmail.be", "hotmail.ca", "hotmail.cl", "hotmail.co.il", "hotmail.co.nz", "hotmail.co.th", "hotmail.co.uk", "hotmail.com", "hotmail.com.ar", "hotmail.com.au", "hotmail.com.br", "hotmail.com.gr", "hotmail.com.mx", "hotmail.com.pe", "hotmail.com.tr", "hotmail.com.vn", "hotmail.cz", "hotmail.de", "hotmail.dk", "hotmail.es", "hotmail.fr", "hotmail.hu", "hotmail.id", "hotmail.ie", "hotmail.in", "hotmail.it", "hotmail.jp", "hotmail.kr", "hotmail.lv", "hotmail.my", "hotmail.ph", "hotmail.pt", "hotmail.sa", "hotmail.sg", "hotmail.sk", "live.be", "live.co.uk", "live.com", "live.com.ar", "live.com.mx", "live.de", "live.es", "live.eu", "live.fr", "live.it", "live.nl", "msn.com", "outlook.at", "outlook.be", "outlook.cl", "outlook.co.il", "outlook.co.nz", "outlook.co.th", "outlook.com", "outlook.com.ar", "outlook.com.au", "outlook.com.br", "outlook.com.gr", "outlook.com.pe", "outlook.com.tr", "outlook.com.vn", "outlook.cz", "outlook.de", "outlook.dk", "outlook.es", "outlook.fr", "outlook.hu", "outlook.id", "outlook.ie", "outlook.in", "outlook.it", "outlook.jp", "outlook.kr", "outlook.lv", "outlook.my", "outlook.ph", "outlook.pt", "outlook.sa", "outlook.sg", "outlook.sk", "passport.com" ], yahoo_domains = [ "rocketmail.com", "yahoo.ca", "yahoo.co.uk", "yahoo.com", "yahoo.de", "yahoo.fr", "yahoo.in", "yahoo.it", "ymail.com" ], yandex_domains = [ "yandex.ru", "yandex.ua", "yandex.kz", "yandex.com", "yandex.by", "ya.ru" ], version = "10.1.0", validator = {
+    }, icloud_domains = [ "icloud.com", "me.com" ], outlookdotcom_domains = [ "hotmail.at", "hotmail.be", "hotmail.ca", "hotmail.cl", "hotmail.co.il", "hotmail.co.nz", "hotmail.co.th", "hotmail.co.uk", "hotmail.com", "hotmail.com.ar", "hotmail.com.au", "hotmail.com.br", "hotmail.com.gr", "hotmail.com.mx", "hotmail.com.pe", "hotmail.com.tr", "hotmail.com.vn", "hotmail.cz", "hotmail.de", "hotmail.dk", "hotmail.es", "hotmail.fr", "hotmail.hu", "hotmail.id", "hotmail.ie", "hotmail.in", "hotmail.it", "hotmail.jp", "hotmail.kr", "hotmail.lv", "hotmail.my", "hotmail.ph", "hotmail.pt", "hotmail.sa", "hotmail.sg", "hotmail.sk", "live.be", "live.co.uk", "live.com", "live.com.ar", "live.com.mx", "live.de", "live.es", "live.eu", "live.fr", "live.it", "live.nl", "msn.com", "outlook.at", "outlook.be", "outlook.cl", "outlook.co.il", "outlook.co.nz", "outlook.co.th", "outlook.com", "outlook.com.ar", "outlook.com.au", "outlook.com.br", "outlook.com.gr", "outlook.com.pe", "outlook.com.tr", "outlook.com.vn", "outlook.cz", "outlook.de", "outlook.dk", "outlook.es", "outlook.fr", "outlook.hu", "outlook.id", "outlook.ie", "outlook.in", "outlook.it", "outlook.jp", "outlook.kr", "outlook.lv", "outlook.my", "outlook.ph", "outlook.pt", "outlook.sa", "outlook.sg", "outlook.sk", "passport.com" ], yahoo_domains = [ "rocketmail.com", "yahoo.ca", "yahoo.co.uk", "yahoo.com", "yahoo.de", "yahoo.fr", "yahoo.in", "yahoo.it", "ymail.com" ], yandex_domains = [ "yandex.ru", "yandex.ua", "yandex.kz", "yandex.com", "yandex.by", "ya.ru" ], charsetRegex = /^[^\s-_](?!.*?[-_]{2,})([a-z0-9-\\]{1,})[^\s]*[^-_\s]$/, upperCaseRegex = /^[A-Z]$/, lowerCaseRegex = /^[a-z]$/, numberRegex = /^[0-9]$/, symbolRegex = /^[-#!$%^&*()_+|~=`{}\[\]:";'<>?,.\/ ]$/, defaultOptions = {
+        minLength: 8,
+        minLowercase: 1,
+        minUppercase: 1,
+        minNumbers: 1,
+        minSymbols: 1,
+        returnScore: !1,
+        pointsPerUnique: 1,
+        pointsPerRepeat: .5,
+        pointsForContainingLower: 10,
+        pointsForContainingUpper: 10,
+        pointsForContainingNumber: 10,
+        pointsForContainingSymbol: 10
+    }, vatMatchers = {
+        GB: /^GB((\d{3} \d{4} ([0-8][0-9]|9[0-6]))|(\d{9} \d{3})|(((GD[0-4])|(HA[5-9]))[0-9]{2}))$/
+    }, version = "13.5.2", validator = {
         version: version,
         toDate: toDate,
         toFloat: toFloat,
@@ -28640,11 +30609,17 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         isURL: isURL,
         isMACAddress: isMACAddress,
         isIP: isIP,
+        isIPRange: isIPRange,
         isFQDN: isFQDN,
         isBoolean: isBoolean,
+        isIBAN: isIBAN,
+        isBIC: isBIC,
         isAlpha: isAlpha,
+        isAlphaLocales: locales$1,
         isAlphanumeric: isAlphanumeric,
+        isAlphanumericLocales: locales$2,
         isNumeric: isNumeric,
+        isPassportNumber: isPassportNumber,
         isPort: isPort,
         isLowercase: isLowercase,
         isUppercase: isUppercase,
@@ -28653,19 +30628,27 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         isHalfWidth: isHalfWidth,
         isVariableWidth: isVariableWidth,
         isMultibyte: isMultibyte,
+        isSemVer: isSemVer,
         isSurrogatePair: isSurrogatePair,
         isInt: isInt,
+        isIMEI: isIMEI,
         isFloat: isFloat,
+        isFloatLocales: locales,
         isDecimal: isDecimal,
         isHexadecimal: isHexadecimal,
+        isOctal: isOctal,
         isDivisibleBy: isDivisibleBy,
         isHexColor: isHexColor,
+        isRgbColor: isRgbColor,
+        isHSL: isHSL,
         isISRC: isISRC,
         isMD5: isMD5,
         isHash: isHash,
+        isJWT: isJWT,
         isJSON: isJSON,
         isEmpty: isEmpty,
         isLength: isLength,
+        isLocale: isLocale,
         isByteLength: isByteLength,
         isUUID: isUUID,
         isMongoId: isMongoId,
@@ -28673,18 +30656,27 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         isBefore: isBefore,
         isIn: isIn,
         isCreditCard: isCreditCard,
+        isIdentityCard: isIdentityCard,
+        isEAN: isEAN,
         isISIN: isISIN,
         isISBN: isISBN,
         isISSN: isISSN,
         isMobilePhone: isMobilePhone,
+        isMobilePhoneLocales: locales$3,
         isPostalCode: isPostalCode,
+        isPostalCodeLocales: locales$4,
+        isEthereumAddress: isEthereumAddress,
         isCurrency: isCurrency,
+        isBtcAddress: isBtcAddress,
         isISO8601: isISO8601,
         isRFC3339: isRFC3339,
         isISO31661Alpha2: isISO31661Alpha2,
         isISO31661Alpha3: isISO31661Alpha3,
+        isBase32: isBase32,
+        isBase58: isBase58,
         isBase64: isBase64,
         isDataURI: isDataURI,
+        isMagnetURI: isMagnetURI,
         isMimeType: isMimeType,
         isLatLong: isLatLong,
         ltrim: ltrim,
@@ -28697,7 +30689,12 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
         blacklist: blacklist$1,
         isWhitelisted: isWhitelisted,
         normalizeEmail: normalizeEmail,
-        toString: toString
+        toString: toString,
+        isSlug: isSlug,
+        isStrongPassword: isStrongPassword,
+        isTaxID: isTaxID,
+        isDate: isDate,
+        isVAT: isVAT
     };
     return validator;
 }), angular.module("fluro.validate", []), angular.module("fluro.validate").service("FluroValidate", function() {
@@ -28749,7 +30746,7 @@ angular.module("ui.bootstrap.collapse", []).directive("uibCollapse", [ "$animate
             return isActual;
 
           case "integer":
-            return validator.isInt(field);
+            return validator.isInt(String(field));
 
           case "string":
             return _.isString(field);
@@ -28904,7 +30901,8 @@ angular.module("fluro.interactions").service("FluroInteraction", [ "Fluro", "Flu
         return !1;
     }
     function isIndex(value, length) {
-        return length = null == length ? MAX_SAFE_INTEGER$1 : length, !!length && ("number" == typeof value || reIsUint.test(value)) && value > -1 && value % 1 == 0 && length > value;
+        var type = typeof value;
+        return length = null == length ? MAX_SAFE_INTEGER$1 : length, !!length && ("number" == type || "symbol" != type && reIsUint.test(value)) && value > -1 && value % 1 == 0 && length > value;
     }
     function baseIsTypedArray(value) {
         return isObjectLike(value) && isLength(value.length) && !!typedArrayTags[baseGetTag(value)];
@@ -28983,18 +30981,19 @@ angular.module("fluro.interactions").service("FluroInteraction", [ "Fluro", "Flu
             function iterateeCallback(err, value) {
                 if (running -= 1, err) done = !0, callback(err); else {
                     if (value === breakLoop || done && 0 >= running) return done = !0, callback(null);
-                    replenish();
+                    looping || replenish();
                 }
             }
             function replenish() {
-                for (;limit > running && !done; ) {
+                for (looping = !0; limit > running && !done; ) {
                     var elem = nextElem();
                     if (null === elem) return done = !0, void (0 >= running && callback(null));
                     running += 1, iteratee(elem.value, elem.key, onlyOnce(iterateeCallback));
                 }
+                looping = !1;
             }
             if (callback = once(callback || noop), 0 >= limit || !obj) return callback(null);
-            var nextElem = iterator(obj), done = !1, running = 0;
+            var nextElem = iterator(obj), done = !1, running = 0, looping = !1;
             replenish();
         };
     }
@@ -29626,7 +31625,8 @@ angular.module("fluro.interactions").service("FluroInteraction", [ "Fluro", "Flu
     typedArrayTags[argsTag$1] = typedArrayTags[arrayTag] = typedArrayTags[arrayBufferTag] = typedArrayTags[boolTag] = typedArrayTags[dataViewTag] = typedArrayTags[dateTag] = typedArrayTags[errorTag] = typedArrayTags[funcTag$1] = typedArrayTags[mapTag] = typedArrayTags[numberTag] = typedArrayTags[objectTag] = typedArrayTags[regexpTag] = typedArrayTags[setTag] = typedArrayTags[stringTag] = typedArrayTags[weakMapTag] = !1;
     var freeExports$1 = "object" == typeof exports && exports && !exports.nodeType && exports, freeModule$1 = freeExports$1 && "object" == typeof module && module && !module.nodeType && module, moduleExports$1 = freeModule$1 && freeModule$1.exports === freeExports$1, freeProcess = moduleExports$1 && freeGlobal.process, nodeUtil = function() {
         try {
-            return freeProcess && freeProcess.binding && freeProcess.binding("util");
+            var types = freeModule$1 && freeModule$1.require && freeModule$1.require("util").types;
+            return types ? types : freeProcess && freeProcess.binding && freeProcess.binding("util");
         } catch (e) {}
     }(), nodeIsTypedArray = nodeUtil && nodeUtil.isTypedArray, isTypedArray = nodeIsTypedArray ? baseUnary(nodeIsTypedArray) : baseIsTypedArray, objectProto$2 = Object.prototype, hasOwnProperty$1 = objectProto$2.hasOwnProperty, objectProto$5 = Object.prototype, nativeKeys = overArg(Object.keys, Object), objectProto$4 = Object.prototype, hasOwnProperty$3 = objectProto$4.hasOwnProperty, eachOfGeneric = doLimit(eachOfLimit, 1 / 0), eachOf = function(coll, iteratee, callback) {
         var eachOfImplementation = isArrayLike(coll) ? eachOfArrayLike : eachOfGeneric;
